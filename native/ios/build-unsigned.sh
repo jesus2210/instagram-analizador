@@ -19,14 +19,14 @@ cp "$PULSO_IOS_ROOT/Package.resolved" "$PULSO_IOS_ROOT/PulsoScreen.xcodeproj/pro
 mkdir -p "$PULSO_OUTPUT"
 xcodebuild -resolvePackageDependencies \
   -project "$PULSO_IOS_ROOT/PulsoScreen.xcodeproj" -scheme PulsoScreen \
-  -onlyUsePackageVersionsFromResolvedFile
+  -onlyUsePackageVersionsFromResolvedFile 2>&1 | tee "$PULSO_OUTPUT/resolve.log"
 xcodebuild archive \
   -project "$PULSO_IOS_ROOT/PulsoScreen.xcodeproj" -scheme PulsoScreen \
   -configuration Release -destination 'generic/platform=iOS' \
   -archivePath "$PULSO_OUTPUT/PulsoScreen.xcarchive" \
   -disableAutomaticPackageResolution \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= \
-  "PULSO_BUNDLE_ID=$PULSO_BUNDLE_ID"
+  "PULSO_BUNDLE_ID=$PULSO_BUNDLE_ID" 2>&1 | tee "$PULSO_OUTPUT/archive.log"
 PULSO_APP="$PULSO_OUTPUT/PulsoScreen.xcarchive/Products/Applications/PulsoScreen.app"
 [[ -d "$PULSO_APP/PlugIns/PulsoBroadcast.appex" ]] || { echo "Falta la extensión de transmisión."; exit 1; }
 [[ -d "$PULSO_APP/PlugIns/PulsoSetup.appex" ]] || { echo "Falta la extensión de configuración."; exit 1; }

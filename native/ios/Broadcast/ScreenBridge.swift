@@ -37,10 +37,16 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
         self.session = URLSession(configuration: configuration)
         RTCInitializeSSL()
         let encoder = RTCDefaultVideoEncoderFactory()
-        encoder.preferredCodec = encoder.supportedCodecs().first(where: { $0.name == "H264" })
-        self.factory = RTCPeerConnectionFactory(encoderFactory: encoder, decoderFactory: RTCDefaultVideoDecoderFactory())
-        self.source = factory.videoSource()
-        self.capturer = RTCVideoCapturer(delegate: source)
+        if let h264 = encoder.supportedCodecs().first(where: { $0.name == "H264" }) {
+            encoder.preferredCodec = h264
+        }
+        // Build dependencies as locals before assigning stored properties: Swift
+        // must not read self.factory/self.source before NSObject's super.init().
+        let rtcFactory = RTCPeerConnectionFactory(encoderFactory: encoder, decoderFactory: RTCDefaultVideoDecoderFactory())
+        let videoSource = rtcFactory.videoSource()
+        self.factory = rtcFactory
+        self.source = videoSource
+        self.capturer = RTCVideoCapturer(delegate: videoSource)
         super.init()
         // Do not contend with Camera's recording microphone or activate WebRTC audio.
         RTCAudioSession.sharedInstance().useManualAudio = true

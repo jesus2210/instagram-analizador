@@ -2,7 +2,7 @@
 
 Este proyecto intenta transmitir la pantalla del iPhone a Pulso mientras usas **Cámara de Apple**. Usa ReplayKit y WebRTC; no abre una cámara propia ni solicita micrófono. No requiere App Groups, Associated Domains, notificaciones push, certificados de distribución ni una cuenta Apple dentro del código.
 
-**Estado real:** código de prototipo y workflow preparados. No se ha compilado con Xcode ni instalado en un iPhone desde este entorno Linux. La prueba del propietario confirma que la grabación de pantalla muestra Cámara, pero no demuestra que una transmisión ReplayKit siga funcionando al cambiar de app o al grabar vídeo. Tampoco demuestra que su instalador gratuito conserve correctamente las extensiones. Esos puntos se prueban con el primer IPA; no se promete una app terminada.
+**Estado real:** el primer intento real en GitHub alcanzó la compilación con Xcode 26.6 y resolvió WebRTC, pero falló por asignar un códec opcional a una propiedad no opcional. Se corrigió esa asignación y una lectura prematura de propiedades durante la inicialización Swift; la siguiente compilación completa sigue pendiente. No existe aún un IPA validado ni una prueba de instalación en iPhone. Este entorno Linux no dispone de Xcode. La prueba del propietario confirma que la grabación de pantalla muestra Cámara, pero no demuestra que una transmisión ReplayKit siga funcionando al cambiar de app o al grabar vídeo. Tampoco demuestra que su instalador gratuito conserve correctamente las extensiones. Esos puntos se prueban con el primer IPA; no se promete una app terminada.
 
 ## Antes de generar el IPA
 
@@ -19,7 +19,7 @@ Este proyecto intenta transmitir la pantalla del iPhone a Pulso mientras usas **
 4. Extrae `PulsoScreen-unsigned.ipa`, `SHA256SUMS.txt` y la guía. El IPA **todavía no está firmado y no se instala abriéndolo directamente**.
 5. Opcionalmente comprueba el archivo con PowerShell: `Get-FileHash .\PulsoScreen-unsigned.ipa -Algorithm SHA256`, comparándolo con `SHA256SUMS.txt`.
 
-Si el workflow falla, conserva el mensaje del primer paso que falla. No hay un IPA válido hasta que Xcode termine el archivo y se hayan comprobado ambas extensiones. No se deben omitir los errores de compilación ni las verificaciones de SwiftPM para obtener un archivo aparentemente listo.
+Después de una corrección en el código, usa **Run workflow** sobre `main` para crear una ejecución nueva. **Re-run jobs** de una ejecución antigua reutiliza su commit anterior. Si el workflow falla, conserva el mensaje del primer paso que falla. Ahora también se sube el artefacto pequeño `PulsoScreen-build-logs` con los logs disponibles de resolución y compilación; el código de salida de Xcode se conserva aunque se guarden los logs. No hay un IPA válido hasta que Xcode termine el archivo y se hayan comprobado ambas extensiones. No se deben omitir los errores de compilación ni las verificaciones de SwiftPM para obtener un archivo aparentemente listo.
 
 El workflow compila con Xcode en macOS. WebRTC se fija en `156.0.0`, commit `3cc466ea040e5dcd1344697bf211dc4c079d1a0c`; el paquete verifica el checksum de su XCFramework. No necesita claves de firma ni credenciales Apple en GitHub. XcodeGen genera un proyecto con app, extensión de configuración y extensión de subida. Las APIs de ReplayKit utilizadas requieren una comprobación de compatibilidad con el iOS concreto; algunas están deprecadas en SDK posteriores.
 
