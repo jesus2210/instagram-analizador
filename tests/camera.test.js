@@ -228,3 +228,22 @@ test("screen rooms distinguish the native sender from the browser camera and kee
     answer,
   );
 });
+test("iPhone diagnostics reach only the viewer, are sanitised and never accept the viewer as author", async (t) => {
+  const { create, request } = await serve(t);
+  const room = await create("diag-client", "screen");
+  const path = `/rooms/${room.id}`;
+  const post = (key, lines) => request(path + "/diag", "POST", { lines }, key);
+  assert.equal((await post(room.viewerKey, ["x"])).status, 403);
+  assert.equal((await post(room.senderKey, "no")).status, 400);
+  const long = "a".repeat(500);
+  assert.equal(
+    (await post(room.senderKey, ["ICE: checking \u{1F4A9}", long, 7])).status,
+    200,
+  );
+  const viewer = await (await request(path, "GET", null, room.viewerKey)).json();
+  assert.equal(viewer.diag[0], "ICE: checking ");
+  assert.equal(viewer.diag[1].length, 160);
+  assert.equal(viewer.diag.length, 2);
+  const sender = await (await request(path, "GET", null, room.senderKey)).json();
+  assert.equal(sender.diag, undefined);
+});

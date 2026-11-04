@@ -25,6 +25,9 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
     private var offerPosted = false
     private var lastFrame: Double = 0
     private var outputSize = ""
+    private var failing = false
+    private var framesSent = 0
+    private var log: [String] = []
     private let senderID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
 
     init(pairing: PairingLink, onFailure: @escaping (String) -> Void) {
@@ -57,8 +60,59 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
         queue.async { [weak self] in self?.begin() }
     }
 
+    // MARK: Diagnostics (never includes keys, SDP or IP addresses)
+
+    private static let clock: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
+    private func memoryMB() -> Int {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? Int(info.resident_size / 1_048_576) : -1
+    }
+
+    /// Must run on `queue`.
+    private func note(_ message: String, flush: Bool = true) {
+        log.append("\(Self.clock.string(from: Date())) \(message) [\(memoryMB()) MB]")
+        if log.count > 30 { log.removeFirst(log.count - 30) }
+        if flush && active { postDiagnostics() }
+    }
+
+    private func postDiagnostics(completion: (() -> Void)? = nil) {
+        guard active else { completion?(); return }
+        request(path: "diag", method: "POST", body: ["lines": log]) { _ in completion?() }
+    }
+
+    private func summarize(candidates sdp: String) -> String {
+        let lines = sdp.components(separatedBy: "\n").filter { $0.hasPrefix("a=candidate:") }
+        func count(_ type: String) -> Int { lines.filter { $0.contains(" typ \(type)") }.count }
+        return "candidatos local=\(count("host")) stun=\(count("srflx")) relay=\(count("relay"))"
+    }
+
+    private func name(_ state: RTCIceConnectionState) -> String {
+        switch state {
+        case .new: return "new"
+        case .checking: return "checking"
+        case .connected: return "connected"
+        case .completed: return "completed"
+        case .failed: return "failed"
+        case .disconnected: return "disconnected"
+        case .closed: return "closed"
+        default: return "other"
+        }
+    }
+
     private func begin() {
         guard active else { return }
+        note("Extensión iniciada. iOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
         request(method: "GET") { [weak self] result in
             guard let self else { return }
             switch result {
@@ -68,6 +122,7 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
                     self.fail("Genera un QR en el modo Pantalla del iPhone de Pulso.")
                     return
                 }
+                self.note("Sala encontrada")
                 self.makeOffer()
             }
         }
@@ -103,6 +158,7 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
                             if self.active { self.fail("No se pudo preparar la conexión del iPhone.") }
                             return
                         }
+                        self.note("Oferta creada; recogiendo candidatos de red")
                         self.canPostOffer = true
                         if connection.iceGatheringState == .complete { self.postOffer() }
                         self.queue.asyncAfter(deadline: .now() + 8) { [weak self] in self?.postOffer() }
@@ -114,6 +170,7 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
 
     private func postOffer() {
         guard active, canPostOffer, !offerPosted, let sdp = peer?.localDescription?.sdp else { return }
+        note("Candidatos listos: \(summarize(candidates: sdp))")
         guard sdp.contains("a=candidate:") else {
             fail("La red no permite conectar. Usa la misma Wi-Fi sin VPN ni aislamiento de invitados.")
             return
@@ -123,7 +180,9 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
             guard let self else { return }
             switch result {
             case .failure(let error): self.fail(error.localizedDescription)
-            case .success: self.pollAnswer(until: Date().addingTimeInterval(45))
+            case .success:
+                self.note("Oferta enviada; esperando respuesta de Windows")
+                self.pollAnswer(until: Date().addingTimeInterval(45))
             }
         }
     }
@@ -141,6 +200,7 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
                         guard let self else { return }
                         self.queue.async {
                             if error != nil { self.fail("El monitor devolvió una respuesta incompatible."); return }
+                            self.note("Respuesta de Windows aceptada: \(self.summarize(candidates: sdp))")
                             self.limitSender()
                             self.queue.asyncAfter(deadline: .now() + 30) { [weak self] in
                                 if let self, self.active, !self.connected { self.fail("No llegó a establecerse la imagen. Comprueba la red y genera otro QR.") }
@@ -172,6 +232,11 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
         let timestamp = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sample))
         guard timestamp.isFinite, timestamp - lastFrame >= 1.0 / 15.0 else { return }
         lastFrame = timestamp
+        framesSent += 1
+        if framesSent == 1 || framesSent % 150 == 0 {
+            let total = framesSent
+            queue.async { [weak self] in self?.note("Fotogramas enviados: \(total)") }
+        }
         let width = CVPixelBufferGetWidth(pixelBuffer), height = CVPixelBufferGetHeight(pixelBuffer)
         guard width > 0, height > 0 else { return }
         let scale = min(1.0, min(1280.0 / Double(max(width, height)), 720.0 / Double(min(width, height))))
@@ -217,10 +282,20 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
         session.invalidateAndCancel()
     }
     private func fail(_ message: String) {
-        guard active else { return }
+        guard active, !failing else { return }
+        failing = true
         send(["type": "error", "message": message])
-        close()
-        onFailure(message)
+        note("ERROR: \(message)", flush: false)
+        // Give the diagnostic upload a moment before the extension is torn down.
+        var finished = false
+        let finish = { [weak self] in
+            guard let self, !finished else { return }
+            finished = true
+            self.close()
+            self.onFailure(message)
+        }
+        postDiagnostics { [weak self] in self?.queue.async { finish() } }
+        queue.asyncAfter(deadline: .now() + 3) { finish() }
     }
 
     private func request(path: String = "", method: String, body: [String: Any]? = nil, completion: @escaping (Result<[String: Any], Error>) -> Void) {
@@ -257,6 +332,7 @@ final class ScreenBridge: NSObject, RTCPeerConnectionDelegate, RTCDataChannelDel
     func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
         queue.async { [weak self] in
             guard let self, self.active else { return }
+            self.note("ICE: \(self.name(newState))")
             if newState == .connected || newState == .completed {
                 self.frameLock.lock(); self.connected = true; self.frameLock.unlock()
             }

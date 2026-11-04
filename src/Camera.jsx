@@ -50,6 +50,13 @@ function leaveRoom(room, key) {
   if (room && key)
     cameraApi(`rooms/${room.id}`, { key, method: "DELETE" }).catch(() => {});
 }
+// Counts ICE candidate kinds only; never prints addresses.
+function candidateSummary(sdp = "") {
+  const lines = sdp.split(/\r?\n/).filter((l) => l.startsWith("a=candidate:"));
+  const count = (type) => lines.filter((l) => l.includes(` typ ${type}`)).length;
+  const mdns = lines.filter((l) => /\s[0-9a-f-]+\.local\s/i.test(l)).length;
+  return `Candidatos: local=${count("host")} (mDNS=${mdns}), stun=${count("srflx")}, relay=${count("relay")}`;
+}
 const clock = (seconds) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 export default function CameraPage({ standalone = false }) {
@@ -109,6 +116,12 @@ function Viewer() {
     [grid, setGrid] = useState(false),
     [remote, setRemote] = useState({ state: "idle", supported: false }),
     [copied, setCopied] = useState(false);
+  const [diag, setDiag] = useState([]),
+    [vlog, setVlog] = useState([]);
+  const addLog = (message) =>
+    setVlog((lines) =>
+      [...lines, `${new Date().toLocaleTimeString()} ${message}`].slice(-30),
+    );
   const video = useRef(null),
     stage = useRef(null),
     peer = useRef(null),
@@ -150,6 +163,8 @@ function Viewer() {
     setError("");
     setStatus("creating");
     setCopied(false);
+    setDiag([]);
+    setVlog([]);
     const control = new AbortController();
     abort.current = control;
     try {
@@ -174,6 +189,26 @@ function Viewer() {
       if (control.signal.aborted) return;
       setQr(code);
       setStatus("waiting");
+      addLog("QR creado; esperando al iPhone");
+      // Keep reading the iPhone's step log until the room is closed.
+      (async () => {
+        while (!control.signal.aborted && roomRef.current === data) {
+          try {
+            const r = await cameraApi(`rooms/${data.id}`, {
+              key: data.viewerKey,
+              signal: control.signal,
+            });
+            if (alive.current && Array.isArray(r.diag)) setDiag(r.diag);
+          } catch (e) {
+            if (e.status === 404 || e.name === "AbortError") break;
+          }
+          try {
+            await pause(2000, control.signal);
+          } catch {
+            break;
+          }
+        }
+      })();
       let offer;
       while (!control.signal.aborted && Date.now() < data.expiresAt) {
         const result = await cameraApi(`rooms/${data.id}`, {
@@ -192,8 +227,11 @@ function Viewer() {
         );
       setStatus("connecting");
       setQr("");
+      addLog(`Oferta del iPhone recibida. ${candidateSummary(offer.sdp)}`);
       const pc = makePeer();
       peer.current = pc;
+      pc.oniceconnectionstatechange = () =>
+        addLog(`ICE: ${pc.iceConnectionState}`);
       pc.ontrack = (e) => {
         if (video.current) {
           video.current.srcObject = e.streams[0] || new MediaStream([e.track]);
@@ -202,6 +240,7 @@ function Viewer() {
       };
       pc.onconnectionstatechange = () => {
         if (!alive.current || control.signal.aborted) return;
+        addLog(`Conexión: ${pc.connectionState}`);
         if (pc.connectionState === "connected") {
           clearTimeout(timer.current);
           setStatus("connected");
@@ -262,6 +301,7 @@ function Viewer() {
           "El navegador o la red bloqueó la conexión directa. Permite el acceso a la red local si se solicita y usa Safari en el iPhone y Chrome o Edge en Windows.",
         );
       if (control.signal.aborted) return;
+      addLog(`Respuesta enviada. ${candidateSummary(pc.localDescription.sdp)}`);
       await cameraApi(`rooms/${data.id}/answer`, {
         method: "POST",
         key: data.viewerKey,
@@ -512,6 +552,24 @@ function Viewer() {
               <X size={16} />
               Terminar sesión
             </button>
+          )}
+          {(diag.length > 0 || vlog.length > 0) && (
+            <details className="camera-small" open={!connected}>
+              <summary>Diagnóstico de conexión</summary>
+              <pre
+                style={{
+                  whiteSpace: "pre-wrap",
+                  fontSize: 12,
+                  maxHeight: 220,
+                  overflow: "auto",
+                }}
+              >
+                {[
+                  ...(diag.length ? ["— iPhone —", ...diag] : []),
+                  ...(vlog.length ? ["— Windows —", ...vlog] : []),
+                ].join("\n")}
+              </pre>
+            </details>
           )}
           {connected && mode === "screen" && (
             <div className="camera-record-remote">

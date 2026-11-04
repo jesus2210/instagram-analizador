@@ -108,13 +108,35 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
     }
   });
   router.get("/rooms/:id", async (req, res) => {
-    const { room, role } = req.camera;
+    const { room, role, id } = req.camera;
+    const diag =
+      role === "viewer" ? (await store.get(`camera:diag:${id}`)) || [] : undefined;
     res.json({
       mode: room.mode || "camera",
       expiresAt: room.expiresAt,
       description: role === "viewer" ? room.offer : room.answer,
       claimed: Boolean(room.senderId),
+      ...(diag ? { diag } : {}),
     });
+  });
+  // Step log written by the iPhone (never SDP, keys or addresses) so the
+  // laptop can show where a pairing stalls.
+  router.post("/rooms/:id/diag", async (req, res) => {
+    if (req.camera.role !== "sender")
+      throw new MetaError("Solo el iPhone puede enviar diagnóstico.", 403);
+    const lines = req.body?.lines;
+    if (!Array.isArray(lines))
+      throw new MetaError("Diagnóstico no válido.", 400);
+    const clean = lines
+      .slice(-30)
+      .filter((line) => typeof line === "string")
+      .map((line) => line.replace(/[^\x20-\x7EÀ-ſ]/g, "").slice(0, 160));
+    await store.put(
+      `camera:diag:${req.camera.id}`,
+      clean,
+      Math.max(1, Math.ceil((req.camera.room.expiresAt - now()) / 1000)),
+    );
+    res.json({ ok: true });
   });
   async function mutate(req, fn) {
     const { id } = req.camera,
@@ -191,6 +213,7 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
       room.answer = null;
     });
     await store.delete(`camera:room:${req.camera.id}`);
+    await store.delete(`camera:diag:${req.camera.id}`);
     res.json({ ok: true });
   });
   return router;

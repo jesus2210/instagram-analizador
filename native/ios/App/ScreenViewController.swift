@@ -1,5 +1,6 @@
 import UIKit
 import ReplayKit
+import Network
 
 final class ScreenViewController: UIViewController, RPBroadcastActivityViewControllerDelegate, RPBroadcastControllerDelegate, UIAdaptivePresentationControllerDelegate {
     private let linkField = UITextView()
@@ -11,6 +12,21 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
     private var preparationTimeout: DispatchWorkItem?
     private var activityController: RPBroadcastActivityViewController?
     private var broadcastTimeout: DispatchWorkItem?
+    private var localNetworkProbe: NWBrowser?
+
+    /// The upload extension cannot show the Local Network prompt. Browsing for a
+    /// Bonjour service from the host app makes iOS ask for it here, once.
+    private func requestLocalNetworkAccess() {
+        guard localNetworkProbe == nil else { return }
+        let browser = NWBrowser(for: .bonjour(type: "_pulso._tcp", domain: nil), using: .tcp)
+        browser.stateUpdateHandler = { _ in }
+        browser.browseResultsChangedHandler = { _, _ in }
+        browser.start(queue: .main)
+        localNetworkProbe = browser
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+            self?.localNetworkProbe?.cancel()
+        }
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -83,6 +99,7 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        requestLocalNetworkAccess()
         checkSetupReturn()
     }
 
