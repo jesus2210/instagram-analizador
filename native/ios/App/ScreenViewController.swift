@@ -2,16 +2,12 @@ import UIKit
 import ReplayKit
 import Network
 
-final class ScreenViewController: UIViewController, RPBroadcastActivityViewControllerDelegate, RPBroadcastControllerDelegate, UIAdaptivePresentationControllerDelegate {
+final class ScreenViewController: UIViewController {
     private let linkField = UITextView()
     private let status = UILabel()
     private let prepareButton = UIButton(type: .system)
-    private var broadcast: RPBroadcastController?
+    private let picker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
     private var incoming: URL?
-    private var preparation: UUID?
-    private var preparationTimeout: DispatchWorkItem?
-    private var activityController: RPBroadcastActivityViewController?
-    private var broadcastTimeout: DispatchWorkItem?
     private var localNetworkProbe: NWBrowser?
 
     /// The upload extension cannot show the Local Network prompt. Browsing for a
@@ -39,7 +35,7 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         title.adjustsFontForContentSizeCategory = true
         let instructions = UILabel()
         instructions.numberOfLines = 0
-        instructions.text = "1. Genera un QR de pantalla en Pulso desde Windows.\n2. Abre el enlace en el iPhone y pégalo aquí.\n3. Prepara y confirma la transmisión en iOS. Cuando Windows muestre la imagen, abre Cámara.\n\nCompartes toda la pantalla, sin audio."
+        instructions.text = "1. Genera un QR de pantalla en Pulso desde Windows.\n2. Abre el enlace en el iPhone y pégalo aquí.\n3. Pulsa Preparar transmisión y, en la hoja de iOS, elige Pulso Screen y Iniciar emisión.\n4. Cuando Windows muestre la imagen, abre Cámara.\n\nCompartes toda la pantalla, sin audio. Para parar, toca el indicador rojo de iOS."
         instructions.font = .preferredFont(forTextStyle: .body)
         instructions.textColor = .secondaryLabel
         instructions.adjustsFontForContentSizeCategory = true
@@ -60,8 +56,7 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         toolbar.sizeToFit()
         linkField.inputAccessoryView = toolbar
         let paste = button("Pegar enlace", action: #selector(pasteLink))
-        configure(prepareButton, title: "Copiar enlace y preparar transmisión", action: #selector(startBroadcast), primary: true)
-        let stop = button("Terminar transmisión", action: #selector(stopBroadcast))
+        configure(prepareButton, title: "Preparar transmisión", action: #selector(startBroadcast), primary: true)
         status.numberOfLines = 0
         status.font = .preferredFont(forTextStyle: .callout)
         status.textColor = .secondaryLabel
@@ -74,7 +69,7 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         version.numberOfLines = 0
         let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         version.text = "Pulso Screen \(appVersion) · iOS \(UIDevice.current.systemVersion)"
-        let stack = UIStackView(arrangedSubviews: [title, status, instructions, linkField, paste, prepareButton, stop, version])
+        let stack = UIStackView(arrangedSubviews: [title, status, instructions, linkField, paste, prepareButton, version])
         stack.axis = .vertical
         stack.spacing = 17
         let scroll = UIScrollView()
@@ -94,31 +89,22 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)
         ])
+        // The system picker must be in the view hierarchy to be triggered; it stays invisible.
+        picker.showsMicrophoneButton = false
+        picker.alpha = 0.011
+        picker.isAccessibilityElement = false
+        picker.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        view.addSubview(picker)
         if let incoming { receive(incoming) }
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         requestLocalNetworkAccess()
-        checkSetupReturn()
     }
 
-    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-        checkSetupReturn()
-    }
-
-    func checkSetupReturn() {
-        guard let attempt = preparation, activityController != nil else { return }
-        // ReplayKit normally delivers its delegate result as setup closes. Do not
-        // leave the host looking idle if the sheet closes without that result.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
-            guard let self, self.preparation == attempt,
-                  self.presentedViewController == nil,
-                  self.activityController?.presentingViewController == nil else { return }
-            self.finishPreparation()
-            self.showError("iOS cerró la configuración sin entregar el controlador de transmisión. La pantalla de configuración se abrió, pero ReplayKit no completó el retorno. Indica este mensaje y la versión de iOS que aparece abajo.")
-        }
-    }
+    /// Kept for the app delegate; the system picker needs no return handling.
+    func checkSetupReturn() {}
 
     private func configure(_ button: UIButton, title: String, action: Selector, primary: Bool = false) {
         var configuration = primary ? UIButton.Configuration.filled() : .tinted()
@@ -143,29 +129,15 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         UIAccessibility.post(notification: .announcement, argument: message)
     }
 
-    private func showError(_ message: String, error: Error? = nil) {
+    private func showError(_ message: String) {
         view.endEditing(true)
-        let detail = error.map { "\nCódigo de iOS: \(($0 as NSError).domain.prefix(80)) / \(($0 as NSError).code)" } ?? ""
-        let text = message + detail
-        status.text = text
+        status.text = message
         status.textColor = .systemRed
         guard presentedViewController == nil, view.window != nil,
               UIApplication.shared.applicationState == .active else { return }
-        let alert = UIAlertController(title: "Pulso Screen", message: text, preferredStyle: .alert)
+        let alert = UIAlertController(title: "Pulso Screen", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Entendido", style: .default))
         present(alert, animated: true)
-    }
-
-    private func finishPreparation() {
-        preparation = nil
-        preparationTimeout?.cancel()
-        preparationTimeout = nil
-        activityController?.delegate = nil
-        activityController = nil
-        prepareButton.isEnabled = true
-        var configuration = prepareButton.configuration
-        configuration?.title = "Copiar enlace y preparar transmisión"
-        prepareButton.configuration = configuration
     }
 
     @objc private func closeKeyboard() { view.endEditing(true) }
@@ -174,7 +146,7 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         guard isViewLoaded else { incoming = url; return }
         do {
             linkField.text = try PairingLink(url.absoluteString).webURL.absoluteString
-            showStatus("Enlace recibido. Pulsa Copiar enlace y preparar transmisión.")
+            showStatus("Enlace recibido. Pulsa Preparar transmisión.")
         } catch { showError(error.localizedDescription) }
     }
 
@@ -186,159 +158,53 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         }
         do {
             linkField.text = try PairingLink(value).webURL.absoluteString
-            showStatus("Enlace pegado. Ahora pulsa Copiar enlace y preparar transmisión.")
+            showStatus("Enlace pegado. Ahora pulsa Preparar transmisión.")
         } catch { showError(error.localizedDescription) }
     }
 
-    private func checkInstalledExtensions() throws -> String {
+    /// Returns the installed upload extension's bundle identifier after checking both extensions.
+    private func installedUploadID() throws -> String {
         guard let directory = Bundle.main.builtInPlugInsURL,
               let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
             throw ScreenError.message("No se encuentran las extensiones. Reinstala el IPA conservando ambas extensiones en el instalador.")
         }
         let manifests = urls.filter { $0.pathExtension == "appex" }.compactMap { Bundle(url: $0)?.infoDictionary }
-        return try BroadcastInstallation.validate(manifests)
+        try BroadcastInstallation.validate(manifests)
+        guard let upload = manifests.first(where: {
+            (($0["NSExtension"] as? [String: Any])?["NSExtensionPointIdentifier"] as? String) == BroadcastInstallation.uploadPoint
+        }), let identifier = upload["CFBundleIdentifier"] as? String else {
+            throw ScreenError.message("No se encuentra la extensión de transmisión.")
+        }
+        return identifier
     }
 
     @objc private func startBroadcast() {
-        guard preparation == nil, broadcast == nil else { return }
         view.endEditing(true)
-        let setupID: String
+        let link: PairingLink
+        let uploadID: String
         do {
-            let link = try PairingLink(linkField.text)
-            setupID = try checkInstalledExtensions()
-            UIPasteboard.general.string = link.webURL.absoluteString
+            link = try PairingLink(linkField.text)
+            uploadID = try installedUploadID()
         } catch { showError(error.localizedDescription); return }
-        RPScreenRecorder.shared().isCameraEnabled = false
-        RPScreenRecorder.shared().isMicrophoneEnabled = false
-        let attempt = UUID()
-        preparation = attempt
         prepareButton.isEnabled = false
-        var configuration = prepareButton.configuration
-        configuration?.title = "Abriendo selector de iOS…"
-        prepareButton.configuration = configuration
-        showStatus("Esperando el selector de transmisión de iOS…")
-        let timeout = DispatchWorkItem { [weak self] in
-            guard let self, self.preparation == attempt else { return }
-            self.finishPreparation()
-            self.showError("iOS no respondió al preparar la transmisión. Cierra la app y vuelve a abrirla. Si se repite, indica la versión de iOS y este mensaje; no hace falta compartir el enlace privado.")
-        }
-        preparationTimeout = timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: timeout)
-        // setupInfo passes the pairing to the upload extension without App Groups.
-        RPBroadcastActivityViewController.load(withPreferredExtension: setupID) { [weak self] controller, error in
+        showStatus("Preparando el emparejamiento…")
+        PairingHandoff.offer(link) { [weak self] error in
             DispatchQueue.main.async {
-                guard let self, self.preparation == attempt else { return }
-                self.preparationTimeout?.cancel()
-                self.preparationTimeout = nil
-                guard error == nil, let controller else {
-                    self.finishPreparation()
-                    self.showError("iOS no pudo abrir el selector. Las extensiones están presentes, pero falta comprobar que iOS las haya registrado correctamente.", error: error)
-                    return
-                }
-                self.activityController = controller
-                controller.delegate = self
-                var configuration = self.prepareButton.configuration
-                configuration?.title = "Esperando confirmación en iOS…"
-                self.prepareButton.configuration = configuration
-                self.showStatus("Confirma el monitor en la pantalla de iOS. Al volver, Pulso iniciará la transmisión.")
-                guard self.presentedViewController == nil, self.view.window != nil,
-                      UIApplication.shared.applicationState == .active else {
-                    self.finishPreparation()
-                    self.showError("Pulso no pudo mostrar la configuración porque otra pantalla está abierta o la app no está activa. Vuelve a Pulso Screen e inténtalo de nuevo.")
-                    return
-                }
-                // Some ReplayKit sheets do not trigger the host's appearance
-                // callbacks when they close. Always bound this stage too.
-                let setupTimeout = DispatchWorkItem { [weak self] in
-                    guard let self, self.preparation == attempt else { return }
-                    self.activityController?.dismiss(animated: true)
-                    self.finishPreparation()
-                    self.showError("iOS no entregó el resultado de la configuración en dos minutos. La preparación se canceló y puedes volver a intentarlo.")
-                }
-                self.preparationTimeout = setupTimeout
-                DispatchQueue.main.asyncAfter(deadline: .now() + 120, execute: setupTimeout)
-                if let popover = controller.popoverPresentationController {
-                    popover.sourceView = self.view
-                    popover.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 1, height: 1)
-                }
-                self.present(controller, animated: true)
-                controller.presentationController?.delegate = self
+                guard let self else { return }
+                self.prepareButton.isEnabled = true
+                if let error { self.showError(error.localizedDescription); return }
+                self.showStatus("Emparejamiento listo. En la hoja de iOS elige Pulso Screen y pulsa Iniciar emisión. Espera a ver la imagen en Windows antes de abrir Cámara.")
+                self.presentPicker(uploadID)
             }
         }
     }
 
-    func broadcastActivityViewController(_ broadcastActivityViewController: RPBroadcastActivityViewController, didFinishWith broadcastController: RPBroadcastController?, error: Error?) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            guard self.activityController === broadcastActivityViewController else { return }
-            self.finishPreparation()
-            // Starting must not depend on a dismissal animation completion:
-            // ReplayKit can have already dismissed its setup UI at this point.
-            if broadcastActivityViewController.presentingViewController != nil {
-                broadcastActivityViewController.dismiss(animated: true)
-            }
-            guard error == nil, let broadcastController else {
-                if let error { self.showError("No se pudo configurar la transmisión.", error: error) }
-                else { self.showStatus("Transmisión cancelada. Puedes volver a prepararla.") }
-                return
-            }
-            self.broadcast = broadcastController
-            broadcastController.delegate = self
-            self.prepareButton.isEnabled = false
-            self.showStatus("Iniciando transmisión…")
-            let timeout = DispatchWorkItem { [weak self] in
-                guard let self, self.broadcast === broadcastController else { return }
-                self.showError("iOS recibió la configuración, pero no confirmó el inicio de la transmisión. Pulsa Terminar transmisión antes de reintentar e indica este mensaje junto con la versión de iOS.")
-            }
-            self.broadcastTimeout = timeout
-            DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: timeout)
-            broadcastController.startBroadcast { [weak self] error in
-                DispatchQueue.main.async {
-                    guard let self, self.broadcast === broadcastController else { return }
-                    self.broadcastTimeout?.cancel()
-                    self.broadcastTimeout = nil
-                    if let error {
-                        self.clearBroadcast()
-                        self.showError("iOS no pudo iniciar la transmisión.", error: error)
-                    }
-                    else { self.showStatus("Transmisión iniciada. Espera a ver la imagen en Windows y después abre Cámara. Si se corta al cambiar de app, necesitamos comprobar la compatibilidad con tu iOS.") }
-                }
-            }
+    private func presentPicker(_ uploadID: String) {
+        picker.preferredExtension = uploadID
+        picker.showsMicrophoneButton = false
+        // The picker is a view wrapping a button; activating it opens the system sheet.
+        for subview in picker.subviews {
+            if let trigger = subview as? UIButton { trigger.sendActions(for: .touchUpInside) }
         }
     }
-
-    private func clearBroadcast() {
-        broadcastTimeout?.cancel()
-        broadcastTimeout = nil
-        broadcast?.delegate = nil
-        broadcast = nil
-        prepareButton.isEnabled = true
-    }
-
-    func broadcastController(_ broadcastController: RPBroadcastController, didFinishWithError error: Error?) {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.broadcast === broadcastController else { return }
-            self.clearBroadcast()
-            if let error { self.showError("La extensión de transmisión se detuvo.", error: error) }
-            else { self.showStatus("La transmisión ha terminado.") }
-        }
-    }
-
-    @objc private func stopBroadcast() {
-        activityController?.dismiss(animated: true)
-        finishPreparation()
-        guard let broadcast else { showStatus("No hay una transmisión iniciada desde esta app."); return }
-        prepareButton.isEnabled = false
-        broadcast.finishBroadcast { [weak self] error in
-            DispatchQueue.main.async {
-                guard let self, self.broadcast === broadcast else { return }
-                if let error { self.showError("No se pudo terminar la transmisión.", error: error) }
-                else {
-                    self.clearBroadcast()
-                    self.showStatus("Transmisión finalizada.")
-                }
-            }
-        }
-    }
-
 }

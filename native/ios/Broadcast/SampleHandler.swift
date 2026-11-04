@@ -5,10 +5,21 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var bridge: ScreenBridge?
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
-        do {
-            guard let value = setupInfo?["pairingURL"] as? String else {
-                throw ScreenError.message("Configura primero el enlace de Pulso Screen. No se puede iniciar desde el Centro de control sin preparar el monitor.")
+        if let value = setupInfo?["pairingURL"] as? String {
+            begin(with: value)
+            return
+        }
+        // Started from the system picker: no setup UI, so claim the pairing the app left on the server.
+        PairingHandoff.claim { [weak self] result in
+            switch result {
+            case .success(let value): self?.begin(with: value)
+            case .failure(let error): self?.finishBroadcastWithError(error)
             }
+        }
+    }
+
+    private func begin(with value: String) {
+        do {
             let pairing = try PairingLink(value)
             let bridge = ScreenBridge(pairing: pairing) { [weak self] message in
                 self?.finishBroadcastWithError(NSError(domain: "PulsoScreen", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))

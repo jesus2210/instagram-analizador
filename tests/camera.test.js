@@ -247,3 +247,32 @@ test("iPhone diagnostics reach only the viewer, are sanitised and never accept t
   const sender = await (await request(path, "GET", null, room.senderKey)).json();
   assert.equal(sender.diag, undefined);
 });
+test("handoff lets the extension claim a screen pairing once, only with the QR key", async (t) => {
+  const { create, request } = await serve(t);
+  const screen = await create("handoff-client", "screen");
+  const post = (path, body) => request(path, "POST", body);
+  assert.equal(
+    (await post("/handoff", { room: screen.id, key: "0".repeat(64) })).status,
+    404,
+  );
+  assert.equal((await post("/handoff/claim", {})).status, 404);
+  assert.equal(
+    (await post("/handoff", { room: screen.id, key: screen.viewerKey })).status,
+    404,
+  );
+  assert.equal(
+    (await post("/handoff", { room: screen.id, key: screen.senderKey })).status,
+    200,
+  );
+  const claimed = await post("/handoff/claim", {});
+  assert.equal(claimed.status, 200);
+  const body = await claimed.json();
+  assert.equal(body.room, screen.id);
+  assert.equal(body.key, screen.senderKey);
+  assert.equal((await post("/handoff/claim", {})).status, 404);
+  const camera = await create("other-client", "camera");
+  assert.equal(
+    (await post("/handoff", { room: camera.id, key: camera.senderKey })).status,
+    404,
+  );
+});

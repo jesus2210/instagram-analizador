@@ -89,6 +89,39 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
     );
     res.status(201).json({ id, viewerKey, senderKey, expiresAt });
   });
+  // The system broadcast picker starts the upload extension without setup UI,
+  // so the extension cannot be handed the pairing directly. The host app drops
+  // it here for two minutes, keyed by the phone's network address, and the
+  // extension claims it once.
+  const clientId = (req) =>
+    digest(
+      req.get("x-vercel-forwarded-for") || req.socket.remoteAddress || "unknown",
+    );
+  router.post("/handoff", async (req, res) => {
+    const { room, key } = req.body || {};
+    if (
+      !/^[a-f0-9]{32}$/.test(room || "") ||
+      !/^[a-f0-9]{64}$/.test(key || "")
+    )
+      throw new MetaError("Enlace no válido. Genera un QR nuevo.", 400);
+    const found = await store.get(`camera:room:${room}`);
+    if (
+      !found ||
+      found.expiresAt <= now() ||
+      (found.mode || "camera") !== "screen" ||
+      !same(key, found.senderHash)
+    )
+      throw notFound();
+    await store.put(`camera:handoff:${clientId(req)}`, { room, key }, 120);
+    res.json({ ok: true });
+  });
+  router.post("/handoff/claim", async (req, res) => {
+    const slot = `camera:handoff:${clientId(req)}`;
+    const held = await store.get(slot);
+    if (!held) throw notFound();
+    await store.delete(slot);
+    res.json({ room: held.room, key: held.key });
+  });
   router.use("/rooms/:id", async (req, res, next) => {
     try {
       if (!/^[a-f0-9]{32}$/.test(req.params.id)) throw notFound();

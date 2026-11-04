@@ -674,12 +674,11 @@ function ScreenLanding({ join }) {
         <ol className="camera-steps">
           <li>Abre Pulso Screen con el botón inferior.</li>
           <li>
-            En la app, pulsa Copiar enlace y preparar transmisión. Elige Pulso
-            Screen y pega el enlace en su configuración.
+            En la app, pega el enlace y pulsa Preparar transmisión. En la hoja
+            de iOS elige Pulso Screen y pulsa Iniciar emisión.
           </li>
           <li>
-            Confirma la transmisión en iOS. Cuando Windows reciba la imagen,
-            abre Cámara y graba allí.
+            Cuando Windows reciba la imagen, abre Cámara y graba allí.
           </li>
         </ol>
         <a className="button primary" href={nativeURL}>
