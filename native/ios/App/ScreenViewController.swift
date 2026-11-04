@@ -1,7 +1,7 @@
 import UIKit
 import ReplayKit
 
-final class ScreenViewController: UIViewController, RPBroadcastActivityViewControllerDelegate {
+final class ScreenViewController: UIViewController, RPBroadcastActivityViewControllerDelegate, RPBroadcastControllerDelegate, UIAdaptivePresentationControllerDelegate {
     private let linkField = UITextView()
     private let status = UILabel()
     private let prepareButton = UIButton(type: .system)
@@ -9,6 +9,8 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
     private var incoming: URL?
     private var preparation: UUID?
     private var preparationTimeout: DispatchWorkItem?
+    private var activityController: RPBroadcastActivityViewController?
+    private var broadcastTimeout: DispatchWorkItem?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -50,7 +52,13 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         status.adjustsFontForContentSizeCategory = true
         status.accessibilityIdentifier = "pairing-status"
         status.text = "Pega el enlace para preparar la transmisión."
-        let stack = UIStackView(arrangedSubviews: [title, status, instructions, linkField, paste, prepareButton, stop])
+        let version = UILabel()
+        version.font = .preferredFont(forTextStyle: .footnote)
+        version.textColor = .secondaryLabel
+        version.numberOfLines = 0
+        let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        version.text = "Pulso Screen \(appVersion) · iOS \(UIDevice.current.systemVersion)"
+        let stack = UIStackView(arrangedSubviews: [title, status, instructions, linkField, paste, prepareButton, stop, version])
         stack.axis = .vertical
         stack.spacing = 17
         let scroll = UIScrollView()
@@ -71,6 +79,28 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
             stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)
         ])
         if let incoming { receive(incoming) }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        checkSetupReturn()
+    }
+
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        checkSetupReturn()
+    }
+
+    func checkSetupReturn() {
+        guard let attempt = preparation, activityController != nil else { return }
+        // ReplayKit normally delivers its delegate result as setup closes. Do not
+        // leave the host looking idle if the sheet closes without that result.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self, self.preparation == attempt,
+                  self.presentedViewController == nil,
+                  self.activityController?.presentingViewController == nil else { return }
+            self.finishPreparation()
+            self.showError("iOS cerró la configuración sin entregar el controlador de transmisión. La pantalla de configuración se abrió, pero ReplayKit no completó el retorno. Indica este mensaje y la versión de iOS que aparece abajo.")
+        }
     }
 
     private func configure(_ button: UIButton, title: String, action: Selector, primary: Bool = false) {
@@ -113,6 +143,8 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         preparation = nil
         preparationTimeout?.cancel()
         preparationTimeout = nil
+        activityController?.delegate = nil
+        activityController = nil
         prepareButton.isEnabled = true
         var configuration = prepareButton.configuration
         configuration?.title = "Copiar enlace y preparar transmisión"
@@ -151,7 +183,7 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
     }
 
     @objc private func startBroadcast() {
-        guard preparation == nil else { return }
+        guard preparation == nil, broadcast == nil else { return }
         view.endEditing(true)
         do {
             let link = try PairingLink(linkField.text)
@@ -178,48 +210,96 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         RPBroadcastActivityViewController.load { [weak self] controller, error in
             DispatchQueue.main.async {
                 guard let self, self.preparation == attempt else { return }
-                self.finishPreparation()
+                self.preparationTimeout?.cancel()
+                self.preparationTimeout = nil
                 guard error == nil, let controller else {
+                    self.finishPreparation()
                     self.showError("iOS no pudo abrir el selector. Las extensiones están presentes, pero falta comprobar que iOS las haya registrado correctamente.", error: error)
                     return
                 }
+                self.activityController = controller
                 controller.delegate = self
+                self.showStatus("Confirma el monitor en la pantalla de iOS. Al volver, Pulso iniciará la transmisión.")
                 if let popover = controller.popoverPresentationController {
                     popover.sourceView = self.view
                     popover.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 1, height: 1)
                 }
                 self.present(controller, animated: true)
+                controller.presentationController?.delegate = self
             }
         }
     }
 
     func broadcastActivityViewController(_ broadcastActivityViewController: RPBroadcastActivityViewController, didFinishWith broadcastController: RPBroadcastController?, error: Error?) {
-        broadcastActivityViewController.dismiss(animated: true) { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard self.activityController === broadcastActivityViewController else { return }
+            self.finishPreparation()
+            // Starting must not depend on a dismissal animation completion:
+            // ReplayKit can have already dismissed its setup UI at this point.
+            if broadcastActivityViewController.presentingViewController != nil {
+                broadcastActivityViewController.dismiss(animated: true)
+            }
             guard error == nil, let broadcastController else {
                 if let error { self.showError("No se pudo configurar la transmisión.", error: error) }
                 else { self.showStatus("Transmisión cancelada. Puedes volver a prepararla.") }
                 return
             }
             self.broadcast = broadcastController
+            broadcastController.delegate = self
+            self.prepareButton.isEnabled = false
             self.showStatus("Iniciando transmisión…")
+            let timeout = DispatchWorkItem { [weak self] in
+                guard let self, self.broadcast === broadcastController else { return }
+                self.showError("iOS recibió la configuración, pero no confirmó el inicio de la transmisión. Pulsa Terminar transmisión antes de reintentar e indica este mensaje junto con la versión de iOS.")
+            }
+            self.broadcastTimeout = timeout
+            DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: timeout)
             broadcastController.startBroadcast { [weak self] error in
                 DispatchQueue.main.async {
-                    guard let self else { return }
-                    if let error { self.showError("iOS no pudo iniciar la transmisión.", error: error) }
+                    guard let self, self.broadcast === broadcastController else { return }
+                    self.broadcastTimeout?.cancel()
+                    self.broadcastTimeout = nil
+                    if let error {
+                        self.clearBroadcast()
+                        self.showError("iOS no pudo iniciar la transmisión.", error: error)
+                    }
                     else { self.showStatus("Transmisión iniciada. Espera a ver la imagen en Windows y después abre Cámara. Si se corta al cambiar de app, necesitamos comprobar la compatibilidad con tu iOS.") }
                 }
             }
         }
     }
 
+    private func clearBroadcast() {
+        broadcastTimeout?.cancel()
+        broadcastTimeout = nil
+        broadcast?.delegate = nil
+        broadcast = nil
+        prepareButton.isEnabled = true
+    }
+
+    func broadcastController(_ broadcastController: RPBroadcastController, didFinishWithError error: Error?) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.broadcast === broadcastController else { return }
+            self.clearBroadcast()
+            if let error { self.showError("La extensión de transmisión se detuvo.", error: error) }
+            else { self.showStatus("La transmisión ha terminado.") }
+        }
+    }
+
     @objc private func stopBroadcast() {
+        activityController?.dismiss(animated: true)
         finishPreparation()
         guard let broadcast else { showStatus("No hay una transmisión iniciada desde esta app."); return }
+        prepareButton.isEnabled = false
         broadcast.finishBroadcast { [weak self] error in
             DispatchQueue.main.async {
-                if let error { self?.showError("No se pudo terminar la transmisión.", error: error) }
-                else { self?.showStatus("Transmisión finalizada.") }
+                guard let self, self.broadcast === broadcast else { return }
+                if let error { self.showError("No se pudo terminar la transmisión.", error: error) }
+                else {
+                    self.clearBroadcast()
+                    self.showStatus("Transmisión finalizada.")
+                }
             }
         }
     }

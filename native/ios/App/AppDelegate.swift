@@ -18,4 +18,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         controller.receive(url)
         return true
     }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        controller.checkSetupReturn()
+    }
 }
