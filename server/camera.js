@@ -110,7 +110,12 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
   router.get("/rooms/:id", async (req, res) => {
     const { room, role, id } = req.camera;
     const diag =
-      role === "viewer" ? (await store.get(`camera:diag:${id}`)) || [] : undefined;
+      role === "viewer"
+        ? [
+            ...((await store.get(`camera:diag-setup:${id}`)) || []),
+            ...((await store.get(`camera:diag:${id}`)) || []),
+          ]
+        : undefined;
     res.json({
       mode: room.mode || "camera",
       expiresAt: room.expiresAt,
@@ -131,8 +136,11 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
       .slice(-30)
       .filter((line) => typeof line === "string")
       .map((line) => line.replace(/[^\x20-\x7EÀ-ſ]/g, "").slice(0, 160));
+    // The setup screen and the upload extension are separate processes with
+    // separate logs; keep them apart so neither overwrites the other.
+    const slot = req.body?.source === "setup" ? "diag-setup" : "diag";
     await store.put(
-      `camera:diag:${req.camera.id}`,
+      `camera:${slot}:${req.camera.id}`,
       clean,
       Math.max(1, Math.ceil((req.camera.room.expiresAt - now()) / 1000)),
     );
@@ -214,6 +222,7 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
     });
     await store.delete(`camera:room:${req.camera.id}`);
     await store.delete(`camera:diag:${req.camera.id}`);
+    await store.delete(`camera:diag-setup:${req.camera.id}`);
     res.json({ ok: true });
   });
   return router;

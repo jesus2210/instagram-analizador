@@ -97,7 +97,9 @@ final class BroadcastSetupViewController: UIViewController {
             return
         }
         do {
-            field.text = try PairingLink(value).webURL.absoluteString
+            let pairing = try PairingLink(value)
+            field.text = pairing.webURL.absoluteString
+            SetupDiagnostics.note("enlace pegado", pairing: pairing)
             status.text = "Enlace pegado. Iniciando la transmisión…"
             status.textColor = .secondaryLabel
             // Continue by itself; the confirm button stays as a fallback.
@@ -108,16 +110,31 @@ final class BroadcastSetupViewController: UIViewController {
         } catch { showError(error.localizedDescription) }
     }
 
+    private var completing = false
+
     @objc private func complete() {
         view.endEditing(true)
+        guard !completing else { return }
         do {
             let pairing = try PairingLink(field.text)
+            SetupDiagnostics.note("complete() llamado; sesión de iOS \(extensionContext == nil ? "ausente" : "presente")", pairing: pairing)
             guard let context = extensionContext else {
                 showError("iOS no proporcionó una sesión de configuración. Cancela y vuelve a preparar la transmisión desde Pulso Screen.")
                 return
             }
+            completing = true
             context.completeRequest(withBroadcast: PairingLink.baseURL, setupInfo: ["pairingURL": pairing.webURL.absoluteString as NSString])
-        } catch { showError(error.localizedDescription) }
+            SetupDiagnostics.note("completeRequest enviado a iOS", pairing: pairing)
+            // If this screen is still alive a few seconds later, iOS did not close it.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+                SetupDiagnostics.note("la pantalla de configuración sigue abierta 4 s después", pairing: pairing)
+                self?.completing = false
+                self?.status.text = "iOS no cerró la configuración. Puedes volver a pulsar Confirmar."
+            }
+        } catch {
+            SetupDiagnostics.note("error: \(error.localizedDescription)", pairing: nil)
+            showError(error.localizedDescription)
+        }
     }
 
     @objc private func cancelSetup() {
