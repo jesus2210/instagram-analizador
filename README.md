@@ -154,3 +154,8 @@ La implementación usa `setupInfo` de ReplayKit para pasar el enlace privado ent
 Lee [native/ios/README.md](native/ios/README.md) antes de ejecutar el workflow: comprueba la cuota gratuita de macOS, conserva las dos extensiones al firmar y utiliza tu cuenta Apple solo en el instalador local. El workflow no se ejecuta con cada push ni activa facturación. La compilación usa un paquete WebRTC con versión/commit fijos y verificación de checksum de SwiftPM. Los pasos de validación y compilación de Swift se ejecutarán en el Mac remoto, no se presentan como pasados aquí.
 
 La web necesita un despliegue con esta versión antes de probar el IPA; publicar código en GitHub o generar el archivo no actualiza Vercel. El acceso de red a Vercel seguía bloqueado en este entorno, por lo que no se afirma que esta versión esté publicada.
+
+
+### Progreso real del prototipo de iPhone
+
+El propietario completó la compilación #3 de GitHub del commit `4606a1c`, descargó el IPA, lo instaló con Sideloadly y logró abrir Pulso Screen tras autorizarlo en iOS. La transmisión todavía no está validada. Una captura mostró texto blanco sobre fondo claro y mensajes ocultos por el teclado; se corrigieron los colores de ambas pantallas, el cierre y desplazamiento del teclado, la confirmación del pegado y los avisos de ReplayKit. La app revisa además la presencia y asociación de las extensiones sin leer credenciales ni perfiles privados. Esta corrección necesita un IPA nuevo y una prueba en el iPhone; la compilación anterior no valida los cambios nuevos.

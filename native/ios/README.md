@@ -2,7 +2,7 @@
 
 Este proyecto intenta transmitir la pantalla del iPhone a Pulso mientras usas **Cámara de Apple**. Usa ReplayKit y WebRTC; no abre una cámara propia ni solicita micrófono. No requiere App Groups, Associated Domains, notificaciones push, certificados de distribución ni una cuenta Apple dentro del código.
 
-**Estado real:** el primer intento real en GitHub alcanzó la compilación con Xcode 26.6 y resolvió WebRTC, pero falló por asignar un códec opcional a una propiedad no opcional. Se corrigió esa asignación y una lectura prematura de propiedades durante la inicialización Swift; la siguiente compilación completa sigue pendiente. No existe aún un IPA validado ni una prueba de instalación en iPhone. Este entorno Linux no dispone de Xcode. La prueba del propietario confirma que la grabación de pantalla muestra Cámara, pero no demuestra que una transmisión ReplayKit siga funcionando al cambiar de app o al grabar vídeo. Tampoco demuestra que su instalador gratuito conserve correctamente las extensiones. Esos puntos se prueban con el primer IPA; no se promete una app terminada.
+**Estado real:** la ejecución #3 del commit `4606a1c` terminó correctamente en GitHub, generó un IPA con WebRTC y ambas extensiones y el propietario lo instaló y abrió en su iPhone. Todavía no se ha confirmado la transmisión de Cámara a Windows. La captura posterior mostró un fallo de contraste en modo oscuro y el teclado ocultando mensajes; se preparó una interfaz corregida con avisos visibles y comprobación de las extensiones instaladas. Esa interfaz nueva requiere otra compilación e instalación antes de verificarla físicamente. Este entorno Linux no dispone de Xcode. La prueba del propietario confirma que la grabación de pantalla muestra Cámara, pero no demuestra que una transmisión ReplayKit siga funcionando al cambiar de app o al grabar vídeo. Tampoco demuestra que su instalador gratuito conserve correctamente las extensiones. Esos puntos se prueban con el primer IPA; no se promete una app terminada.
 
 ## Antes de generar el IPA
 
@@ -62,10 +62,18 @@ El inicio directo desde el Centro de control sin configuración previa no dispon
 
 ## Desarrollo con un Mac disponible
 
-Instala Xcode y XcodeGen, y ejecuta `bash native/ios/build-unsigned.sh` desde el repositorio. El script rechaza Linux, usa verificación normal de SwiftPM, genera el proyecto e incluye ambas extensiones en el IPA. Para probar el parser independiente: `swiftc native/ios/Shared/PairingLink.swift native/ios/Validation/main.swift -o /tmp/pulso-pairing-tests` y ejecuta ese binario.
+Instala Xcode y XcodeGen, y ejecuta `bash native/ios/build-unsigned.sh` desde el repositorio. El script rechaza Linux, usa verificación normal de SwiftPM, genera el proyecto e incluye ambas extensiones en el IPA. Para probar el parser independiente: `swiftc native/ios/Shared/PairingLink.swift native/ios/Shared/BroadcastInstallation.swift native/ios/Validation/main.swift -o /tmp/pulso-pairing-tests` y ejecuta ese binario.
 
 El código Swift no se ha compilado en este entorno Linux. Las pruebas Node y de navegador validan el protocolo y la web, **no sustituyen** Xcode, la firma ni la prueba física de ReplayKit.
 
 ### Corrección de empaquetado de WebRTC
 
 El segundo fallo comunicado ocurrió al copiar el producto `WebRTC` como si fuera un archivo, sin `.framework`. El proyecto ahora enlaza el producto WebRTC mediante SwiftPM y desactiva la copia explícita de XcodeGen en ambos targets; Xcode gestiona el XCFramework binario. No se cambió la versión ni se desactivó la verificación del paquete. Antes de crear el IPA se exige que exista `Frameworks/WebRTC.framework/WebRTC` dentro de la app archivada, además de ambas extensiones. La comprobación evita distribuir una app incompleta, pero el resultado real debe confirmarse con una ejecución nueva de GitHub sobre el último commit de `main`.
+
+### Interfaz y comprobación de la instalación
+
+La interfaz usa colores semánticos para modo claro/oscuro, un botón Listo sobre el teclado y un área desplazable que se ajusta al teclado. El estado se muestra arriba y los errores de validación o ReplayKit aparecen como avisos visibles, con dominio/código numérico de iOS cuando existe; no se imprime el enlace privado.
+
+Antes de preparar una transmisión, la app revisa únicamente los manifiestos públicos de sus extensiones instaladas: deben existir una extensión de configuración y una de subida, y la asociación declarada debe coincidir con el identificador instalado. Si Sideloadly eliminó una extensión o cambió los identificadores sin actualizar su asociación, la app lo indicará antes de abrir el selector. Esto no valida los perfiles ni garantiza que iOS haya registrado el servicio. La espera del selector tiene un límite de 20 segundos para mostrar un mensaje si iOS no responde.
+
+Después de instalar una versión nueva genera un QR nuevo: el enlace anterior puede haber caducado durante la compilación o instalación. La apariencia y el selector deben comprobarse de nuevo en el iPhone; estas correcciones no equivalen a una transmisión validada.

@@ -22,7 +22,7 @@ jobs:
         run: command -v xcodegen >/dev/null || brew install xcodegen
       - name: Validate pairing parser with the Swift compiler
         run: |
-          swiftc native/ios/Shared/PairingLink.swift native/ios/Validation/main.swift -o "$RUNNER_TEMP/pulso-pairing-tests"
+          swiftc native/ios/Shared/PairingLink.swift native/ios/Shared/BroadcastInstallation.swift native/ios/Validation/main.swift -o "$RUNNER_TEMP/pulso-pairing-tests"
           "$RUNNER_TEMP/pulso-pairing-tests"
       - name: Build unsigned iPhone app and both ReplayKit extensions
         run: bash native/ios/build-unsigned.sh

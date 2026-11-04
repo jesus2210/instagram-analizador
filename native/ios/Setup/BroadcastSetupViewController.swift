@@ -8,55 +8,113 @@ final class BroadcastSetupViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
+        view.tintColor = .systemBlue
         let title = UILabel()
         title.text = "Conectar Pulso Screen"
-        title.font = .systemFont(ofSize: 24, weight: .bold)
+        title.font = .preferredFont(forTextStyle: .title2)
+        title.textColor = .label
+        title.numberOfLines = 0
+        title.adjustsFontForContentSizeCategory = true
         let instructions = UILabel()
-        instructions.text = "Pega el enlace temporal de Pulso. Al continuar, iOS enviará toda la pantalla al monitor emparejado, sin audio. Podrás detenerla desde el indicador de transmisión de iOS."
+        instructions.text = "Pega el enlace temporal y confirma el monitor. Se enviará toda la pantalla a Windows, sin audio."
         instructions.numberOfLines = 0
+        instructions.font = .preferredFont(forTextStyle: .body)
+        instructions.textColor = .secondaryLabel
+        instructions.adjustsFontForContentSizeCategory = true
         field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        field.textColor = .label
         field.autocapitalizationType = .none
         field.autocorrectionType = .no
+        field.keyboardType = .URL
         field.backgroundColor = .secondarySystemBackground
+        field.layer.cornerRadius = 12
         field.heightAnchor.constraint(equalToConstant: 110).isActive = true
         field.accessibilityLabel = "Enlace de Pulso"
-        let paste = UIButton(type: .system)
-        paste.setTitle("Pegar enlace", for: .normal)
-        paste.addTarget(self, action: #selector(pasteLink), for: .touchUpInside)
-        let done = UIButton(type: .system)
-        done.setTitle("Confirmar monitor y continuar", for: .normal)
-        done.addTarget(self, action: #selector(complete), for: .touchUpInside)
-        let cancel = UIButton(type: .system)
-        cancel.setTitle("Cancelar", for: .normal)
-        cancel.addTarget(self, action: #selector(cancelSetup), for: .touchUpInside)
+        let toolbar = UIToolbar()
+        toolbar.items = [
+            UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
+            UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(closeKeyboard))
+        ]
+        toolbar.sizeToFit()
+        field.inputAccessoryView = toolbar
+        let paste = button("Pegar enlace", action: #selector(pasteLink))
+        let done = button("Confirmar monitor y continuar", action: #selector(complete), primary: true)
+        let cancel = button("Cancelar", action: #selector(cancelSetup))
         status.numberOfLines = 0
-        let stack = UIStackView(arrangedSubviews: [title, instructions, field, paste, done, cancel, status])
+        status.font = .preferredFont(forTextStyle: .callout)
+        status.textColor = .secondaryLabel
+        status.adjustsFontForContentSizeCategory = true
+        status.text = "Falta pegar el enlace del monitor."
+        let stack = UIStackView(arrangedSubviews: [title, status, instructions, field, paste, done, cancel])
         stack.axis = .vertical
         stack.spacing = 20
+        let scroll = UIScrollView()
+        scroll.keyboardDismissMode = .interactive
+        scroll.translatesAutoresizingMaskIntoConstraints = false
         stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
+        view.addSubview(scroll)
+        scroll.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 24),
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -24)
+            scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 24),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -24),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor, constant: -24),
+            stack.widthAnchor.constraint(equalTo: scroll.frameLayoutGuide.widthAnchor, constant: -48)
         ])
     }
 
+    private func button(_ title: String, action: Selector, primary: Bool = false) -> UIButton {
+        let button = UIButton(type: .system)
+        var configuration = primary ? UIButton.Configuration.filled() : .tinted()
+        configuration.title = title
+        configuration.titleAlignment = .center
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 13, leading: 12, bottom: 13, trailing: 12)
+        button.configuration = configuration
+        button.titleLabel?.numberOfLines = 0
+        button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
+    @objc private func closeKeyboard() { view.endEditing(true) }
+
+    private func showError(_ message: String) {
+        view.endEditing(true)
+        status.text = message
+        status.textColor = .systemRed
+        guard presentedViewController == nil, view.window != nil else { return }
+        let alert = UIAlertController(title: "Configuración de Pulso", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Entendido", style: .default))
+        present(alert, animated: true)
+    }
+
     @objc private func pasteLink() {
-        // User-initiated paste in a visible setup UI, never from the background uploader.
+        view.endEditing(true)
         guard let value = UIPasteboard.general.string else {
-            status.text = "No hay un enlace copiado. Vuelve a Pulso Screen y copia el del QR."
+            showError("No hay un enlace copiado. Vuelve a Pulso Screen y copia el del QR.")
             return
         }
-        field.text = value
+        do {
+            field.text = try PairingLink(value).webURL.absoluteString
+            status.text = "Enlace pegado. Confirma el monitor para continuar."
+            status.textColor = .secondaryLabel
+        } catch { showError(error.localizedDescription) }
     }
 
     @objc private func complete() {
+        view.endEditing(true)
         do {
             let pairing = try PairingLink(field.text)
-            extensionContext?.completeRequest(withBroadcast: PairingLink.baseURL, setupInfo: ["pairingURL": pairing.webURL.absoluteString as NSString])
-        } catch { status.text = error.localizedDescription }
+            guard let context = extensionContext else {
+                showError("iOS no proporcionó una sesión de configuración. Cancela y vuelve a preparar la transmisión desde Pulso Screen.")
+                return
+            }
+            context.completeRequest(withBroadcast: PairingLink.baseURL, setupInfo: ["pairingURL": pairing.webURL.absoluteString as NSString])
+        } catch { showError(error.localizedDescription) }
     }
 
     @objc private func cancelSetup() {

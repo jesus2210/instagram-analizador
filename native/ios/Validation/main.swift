@@ -31,3 +31,24 @@ do {
 } catch {
     fatalError("Pairing validation failed")
 }
+
+func uploadManifest(_ identifier: String) -> [String: Any] {
+    ["CFBundleIdentifier": identifier, "NSExtension": ["NSExtensionPointIdentifier": BroadcastInstallation.uploadPoint]]
+}
+func setupManifest(_ uploadID: String) -> [String: Any] {
+    ["CFBundleIdentifier": "dev.pulso.test.setup", "NSExtension": [
+        "NSExtensionPointIdentifier": BroadcastInstallation.setupPoint,
+        "NSExtensionAttributes": ["RPBroadcastUploadExtension": uploadID]
+    ]]
+}
+do {
+    let upload = uploadManifest("dev.pulso.test.broadcast")
+    let setup = setupManifest("dev.pulso.test.broadcast")
+    try BroadcastInstallation.validate([upload, setup])
+    for manifests in [[], [upload], [setup], [upload, upload, setup], [upload, setupManifest("dev.pulso.changed.broadcast")]] {
+        var rejected = false
+        do { try BroadcastInstallation.validate(manifests) } catch { rejected = true }
+        require(rejected, "Missing, duplicate or mismatched broadcast services accepted")
+    }
+    print("Installed-service validation passed: both services required; missing, duplicate and changed identifiers rejected.")
+} catch { fatalError("Installed-service validation failed") }
