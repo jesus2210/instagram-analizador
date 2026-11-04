@@ -30,6 +30,11 @@ xcodebuild archive \
 PULSO_APP="$PULSO_OUTPUT/PulsoScreen.xcarchive/Products/Applications/PulsoScreen.app"
 [[ -d "$PULSO_APP/PlugIns/PulsoBroadcast.appex" ]] || { echo "Falta la extensión de transmisión."; exit 1; }
 [[ -d "$PULSO_APP/PlugIns/PulsoSetup.appex" ]] || { echo "Falta la extensión de configuración."; exit 1; }
+# SwiftPM/Xcode embeds the binary XCFramework; do not copy a bare package product.
+[[ -f "$PULSO_APP/Frameworks/WebRTC.framework/WebRTC" ]] || {
+  echo "Falta Frameworks/WebRTC.framework/WebRTC en el archivo. No se generará un IPA incompleto."
+  exit 1
+}
 PULSO_PACKAGE="$(mktemp -d "$PULSO_OUTPUT/package.XXXXXX")"
 trap 'rm -rf "$PULSO_PACKAGE"' EXIT
 mkdir -p "$PULSO_PACKAGE/Payload"

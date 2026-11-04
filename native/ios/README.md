@@ -65,3 +65,7 @@ El inicio directo desde el Centro de control sin configuración previa no dispon
 Instala Xcode y XcodeGen, y ejecuta `bash native/ios/build-unsigned.sh` desde el repositorio. El script rechaza Linux, usa verificación normal de SwiftPM, genera el proyecto e incluye ambas extensiones en el IPA. Para probar el parser independiente: `swiftc native/ios/Shared/PairingLink.swift native/ios/Validation/main.swift -o /tmp/pulso-pairing-tests` y ejecuta ese binario.
 
 El código Swift no se ha compilado en este entorno Linux. Las pruebas Node y de navegador validan el protocolo y la web, **no sustituyen** Xcode, la firma ni la prueba física de ReplayKit.
+
+### Corrección de empaquetado de WebRTC
+
+El segundo fallo comunicado ocurrió al copiar el producto `WebRTC` como si fuera un archivo, sin `.framework`. El proyecto ahora enlaza el producto WebRTC mediante SwiftPM y desactiva la copia explícita de XcodeGen en ambos targets; Xcode gestiona el XCFramework binario. No se cambió la versión ni se desactivó la verificación del paquete. Antes de crear el IPA se exige que exista `Frameworks/WebRTC.framework/WebRTC` dentro de la app archivada, además de ambas extensiones. La comprobación evita distribuir una app incompleta, pero el resultado real debe confirmarse con una ejecución nueva de GitHub sobre el último commit de `main`.

@@ -41,6 +41,13 @@ test("iOS project embeds both required ReplayKit extensions without requiring pa
       .embed,
     false,
   );
+  // Package products are linked through SwiftPM. Explicit embedding creates
+  // a Copy Files entry for bare "WebRTC", which is not a framework path.
+  const hostPackage = targets.PulsoScreen.dependencies.find(
+    (d) => d.package === "WebRTC",
+  );
+  assert.equal(hostPackage.product, "WebRTC");
+  assert.equal(hostPackage.embed, false);
   const pin = JSON.parse(
     await readFile(new URL("Package.resolved", root), "utf8"),
   ).pins[0];

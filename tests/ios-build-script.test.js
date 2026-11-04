@@ -57,3 +57,55 @@ test("unsigned build keeps compiler exit status and saves diagnostics without pr
     access(join(folder, "native", "build", "PulsoScreen-unsigned.ipa")),
   );
 });
+
+test("archive without the runtime WebRTC binary is rejected before IPA packaging", async (t) => {
+  const folder = await mkdtemp(join(tmpdir(), "pulso-ios-framework-"));
+  t.after(() => rm(folder, { recursive: true, force: true }));
+  const ios = join(folder, "native", "ios"),
+    bin = join(folder, "bin");
+  await mkdir(ios, { recursive: true });
+  await mkdir(bin);
+  await copyFile(
+    new URL("../native/ios/build-unsigned.sh", import.meta.url),
+    join(ios, "build-unsigned.sh"),
+  );
+  await writeFile(join(ios, "Package.resolved"), "{}");
+  await writeFile(join(bin, "uname"), '#!/bin/sh\nprintf "Darwin\\n"\n', {
+    mode: 0o755,
+  });
+  await writeFile(join(bin, "xcodegen"), "#!/bin/sh\nexit 0\n", {
+    mode: 0o755,
+  });
+  // Simulate successful archiving with both extensions but no dynamic framework.
+  const app = join(
+    folder,
+    "native",
+    "build",
+    "PulsoScreen.xcarchive",
+    "Products",
+    "Applications",
+    "PulsoScreen.app",
+  );
+  await mkdir(join(app, "PlugIns", "PulsoBroadcast.appex"), {
+    recursive: true,
+  });
+  await mkdir(join(app, "PlugIns", "PulsoSetup.appex"), { recursive: true });
+  await writeFile(
+    join(bin, "xcodebuild"),
+    '#!/bin/sh\necho "simulated archive completed"\nexit 0\n',
+    { mode: 0o755 },
+  );
+  const result = spawnSync("bash", [join(ios, "build-unsigned.sh")], {
+    env: {
+      ...process.env,
+      PATH: bin + ":" + process.env.PATH,
+      PULSO_BUNDLE_ID: "dev.pulso.test.screen",
+    },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /Falta Frameworks\/WebRTC\.framework\/WebRTC/);
+  await assert.rejects(
+    access(join(folder, "native", "build", "PulsoScreen-unsigned.ipa")),
+  );
+});

@@ -71,7 +71,8 @@
         },
         {
           "package": "WebRTC",
-          "embed": true
+          "embed": false,
+          "product": "WebRTC"
         },
         {
           "sdk": "ReplayKit.framework"
@@ -114,7 +115,8 @@
       "dependencies": [
         {
           "package": "WebRTC",
-          "embed": false
+          "embed": false,
+          "product": "WebRTC"
         },
         {
           "sdk": "ReplayKit.framework"
