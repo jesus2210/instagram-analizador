@@ -1,0 +1,22 @@
+workflows:
+  pulso-screen-unsigned:
+    name: Pulso Screen (unsigned IPA)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+      vars:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+        PULSO_BUNDLE_ID: dev.pulso.jesus2210.screen
+    scripts:
+      - name: Install project generator
+        script: command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Validate pairing parser with the Swift compiler
+        script: |
+          swiftc native/ios/Shared/PairingLink.swift native/ios/Shared/BroadcastInstallation.swift native/ios/Validation/main.swift -o "$TMPDIR/pulso-pairing-tests"
+          "$TMPDIR/pulso-pairing-tests"
+      - name: Build unsigned iPhone app and both ReplayKit extensions
+        script: bash native/ios/build-unsigned.sh
+    artifacts:
+      - native/build/PulsoScreen-unsigned.ipa
+      - native/build/SHA256SUMS.txt
