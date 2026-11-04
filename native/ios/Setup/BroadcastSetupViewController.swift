@@ -28,15 +28,12 @@ final class BroadcastSetupViewController: UIViewController {
         field.keyboardType = .URL
         field.backgroundColor = .secondarySystemBackground
         field.layer.cornerRadius = 12
-        field.heightAnchor.constraint(equalToConstant: 110).isActive = true
+        // The link only arrives through "Pegar enlace". A read-only field never
+        // opens the keyboard, which used to cover the confirm button.
+        field.isEditable = false
+        field.isSelectable = false
+        field.heightAnchor.constraint(equalToConstant: 70).isActive = true
         field.accessibilityLabel = "Enlace de Pulso"
-        let toolbar = UIToolbar()
-        toolbar.items = [
-            UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil),
-            UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(closeKeyboard))
-        ]
-        toolbar.sizeToFit()
-        field.inputAccessoryView = toolbar
         let paste = button("Pegar enlace", action: #selector(pasteLink))
         let done = button("Confirmar monitor y continuar", action: #selector(complete), primary: true)
         let cancel = button("Cancelar", action: #selector(cancelSetup))
@@ -45,9 +42,10 @@ final class BroadcastSetupViewController: UIViewController {
         status.textColor = .secondaryLabel
         status.adjustsFontForContentSizeCategory = true
         status.text = "Falta pegar el enlace del monitor."
-        let stack = UIStackView(arrangedSubviews: [title, status, instructions, field, paste, done, cancel])
+        // Action buttons first so nothing important can fall below the sheet.
+        let stack = UIStackView(arrangedSubviews: [title, status, paste, done, field, cancel, instructions])
         stack.axis = .vertical
-        stack.spacing = 20
+        stack.spacing = 16
         let scroll = UIScrollView()
         scroll.keyboardDismissMode = .interactive
         scroll.translatesAutoresizingMaskIntoConstraints = false
@@ -56,7 +54,7 @@ final class BroadcastSetupViewController: UIViewController {
         scroll.addSubview(stack)
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
             scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor, constant: 24),
@@ -100,8 +98,13 @@ final class BroadcastSetupViewController: UIViewController {
         }
         do {
             field.text = try PairingLink(value).webURL.absoluteString
-            status.text = "Enlace pegado. Confirma el monitor para continuar."
+            status.text = "Enlace pegado. Iniciando la transmisión…"
             status.textColor = .secondaryLabel
+            // Continue by itself; the confirm button stays as a fallback.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self, !self.field.text.isEmpty else { return }
+                self.complete()
+            }
         } catch { showError(error.localizedDescription) }
     }
 

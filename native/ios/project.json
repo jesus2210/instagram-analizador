@@ -12,8 +12,8 @@
       "IPHONEOS_DEPLOYMENT_TARGET": "18.0",
       "PULSO_BUNDLE_ID": "dev.pulso.screen",
       "CODE_SIGN_STYLE": "Automatic",
-      "CURRENT_PROJECT_VERSION": "4",
-      "MARKETING_VERSION": "0.1.3"
+      "CURRENT_PROJECT_VERSION": "5",
+      "MARKETING_VERSION": "0.1.4"
     }
   },
   "packages": {
