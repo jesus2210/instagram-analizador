@@ -60,6 +60,8 @@ export default function CameraPage({ standalone = false }) {
   useEffect(() => {
     if (join) window.history.replaceState(null, "", window.location.pathname);
   }, [join]);
+  const screenJoin =
+    window.location.pathname.replace(/\/$/, "") === "/screen" && join;
   return (
     <div className={`camera-module ${standalone ? "camera-standalone" : ""}`}>
       {standalone && (
@@ -75,6 +77,8 @@ export default function CameraPage({ standalone = false }) {
           <h1>Este enlace de cámara no es válido.</h1>
           <p>Genera un nuevo QR en la laptop y escanéalo con el iPhone.</p>
         </section>
+      ) : screenJoin ? (
+        <ScreenLanding join={join} />
       ) : !cameraSupported() ? (
         <section className="camera-card">
           <h1>Abre Pulso desde una conexión segura</h1>
@@ -96,6 +100,7 @@ function ActivityLogo() {
   return <Camera size={23} />;
 }
 function Viewer() {
+  const [mode, setMode] = useState("screen");
   const [room, setRoom] = useState(null),
     [qr, setQr] = useState(""),
     [status, setStatus] = useState("idle"),
@@ -150,6 +155,7 @@ function Viewer() {
     try {
       const data = await cameraApi("rooms", {
         method: "POST",
+        body: { mode },
         signal: control.signal,
       });
       if (control.signal.aborted) {
@@ -158,7 +164,7 @@ function Viewer() {
       }
       roomRef.current = data;
       setRoom(data);
-      const url = `${window.location.origin}/camera#room=${data.id}&key=${data.senderKey}`;
+      const url = `${window.location.origin}/${mode === "screen" ? "screen" : "camera"}#room=${data.id}&key=${data.senderKey}`;
       const code = await QRCode.toDataURL(url, {
         width: 280,
         margin: 3,
@@ -282,7 +288,7 @@ function Viewer() {
   async function copy() {
     try {
       await navigator.clipboard.writeText(
-        `${location.origin}/camera#room=${room.id}&key=${room.senderKey}`,
+        `${location.origin}/${mode === "screen" ? "screen" : "camera"}#room=${room.id}&key=${room.senderKey}`,
       );
       setCopied(true);
     } catch {
@@ -295,14 +301,57 @@ function Viewer() {
       <section className="camera-intro">
         <div>
           <span className="eyebrow">ENCUADRA. COMPRUEBA. GRABA.</span>
-          <h1>La cámara del iPhone, frente a ti.</h1>
+          <h1>Tu iPhone, frente a ti.</h1>
           <p>
-            Usa la laptop como monitor de tu cámara trasera. Sin aplicaciones
-            adicionales ni vídeo guardado en el servidor.
+            {mode === "screen"
+              ? "Comparte la pantalla con Pulso Screen y sigue grabando desde Cámara de Apple. Requiere instalar nuestro prototipo de iPhone."
+              : "Abre la cámara dentro del navegador y mírala en Windows. Este modo no muestra la app Cámara de Apple."}
           </p>
         </div>
         <Monitor size={40} />
       </section>
+      <div
+        className="camera-modes"
+        role="group"
+        aria-label="Origen de la imagen"
+      >
+        <button
+          className={mode === "screen" ? "selected" : ""}
+          disabled={!["idle", "ended", "failed"].includes(status)}
+          aria-pressed={mode === "screen"}
+          onClick={() => setMode("screen")}
+        >
+          Pantalla del iPhone (app propia)
+        </button>
+        <button
+          className={mode === "camera" ? "selected" : ""}
+          disabled={!["idle", "ended", "failed"].includes(status)}
+          aria-pressed={mode === "camera"}
+          onClick={() => setMode("camera")}
+        >
+          Cámara del navegador
+        </button>
+      </div>
+      {mode === "screen" && (
+        <div className="camera-card">
+          <h2>Pulso Screen · prototipo para instalar</h2>
+          <p>
+            La app y la compilación para iOS están preparadas en el repositorio.
+            Primero hay que generar el IPA, firmarlo en tu Windows e instalarlo.
+            El funcionamiento de la transmisión con Cámara de Apple aún necesita
+            la prueba en tu iPhone; no basta con la grabación de pantalla que ya
+            probaste.
+          </p>
+          <a
+            className="text-button"
+            href="https://github.com/jesus2210/instagram-analizador/blob/main/native/ios/README.md"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Ver instalación y renovación gratuita →
+          </a>
+        </div>
+      )}
       {error && (
         <div className="camera-error" role="alert">
           {error}
@@ -346,8 +395,9 @@ function Viewer() {
                         : "Tu encuadre aparecerá aquí"}
               </h2>
               <p>
-                Abre la cámara dentro de Pulso en el iPhone. Su imagen se
-                mostrará en esta pantalla.
+                {mode === "screen"
+                  ? "Empareja Pulso Screen, confirma la transmisión en iOS y después abre Cámara de Apple."
+                  : "Abre la cámara dentro de Pulso en el iPhone. Su imagen se mostrará aquí."}
               </p>
             </div>
           )}
@@ -400,11 +450,17 @@ function Viewer() {
                 src={qr}
                 width="280"
                 height="280"
-                alt="QR privado para conectar la cámara del iPhone"
+                alt={
+                  mode === "screen"
+                    ? "QR privado para compartir la pantalla del iPhone"
+                    : "QR privado para conectar la cámara del iPhone"
+                }
               />
               <p className="camera-small">
-                Caduca en 5 minutos. El enlace permite conectar una cámara;
-                compártelo solo con tu iPhone.
+                Caduca en 5 minutos. Compártelo solo con tu iPhone.{" "}
+                {mode === "screen"
+                  ? "Elige Abrir Pulso Screen después de escanearlo."
+                  : "Permite la cámara en Safari."}
               </p>
               <button className="button white" onClick={copy}>
                 {copied ? <Check size={16} /> : <Smartphone size={16} />}{" "}
@@ -415,20 +471,28 @@ function Viewer() {
             <div className="camera-paired">
               <Check size={32} />
               <p>
-                Coloca el iPhone apuntándote y mira el resultado en la laptop.
+                {mode === "screen"
+                  ? "Abre Cámara de Apple en el iPhone y controla el encuadre aquí. Graba desde los controles de Cámara."
+                  : "Coloca el iPhone apuntándote y mira el resultado en la laptop."}
               </p>
             </div>
           ) : (
             <ol className="camera-steps">
               <li>Abre este monitor en la laptop.</li>
               <li>Genera un QR y escanéalo con el iPhone.</li>
-              <li>En Safari, pulsa Permitir cámara y conectar.</li>
+              <li>
+                {mode === "screen"
+                  ? "Abre Pulso Screen, configura el enlace y confirma la transmisión de pantalla."
+                  : "En Safari, pulsa Permitir cámara y conectar."}
+              </li>
             </ol>
           )}
           {["idle", "failed", "ended"].includes(status) && (
             <button className="button primary" onClick={create}>
               <Camera size={17} />
-              Generar QR de cámara
+              {mode === "screen"
+                ? "Generar QR de pantalla"
+                : "Generar QR de cámara"}
             </button>
           )}
           {["creating", "connecting"].includes(status) && (
@@ -449,7 +513,16 @@ function Viewer() {
               Terminar sesión
             </button>
           )}
-          {connected && (
+          {connected && mode === "screen" && (
+            <div className="camera-record-remote">
+              <h3>Graba desde Cámara de Apple</h3>
+              <p>
+                Este monitor no inicia ni detiene la grabación de la app Cámara.
+                El vídeo final queda en Fotos del iPhone.
+              </p>
+            </div>
+          )}
+          {connected && mode === "camera" && (
             <div className="camera-record-remote">
               <h3>Grabación opcional</h3>
               <p>
@@ -507,6 +580,86 @@ function Viewer() {
         </p>
       </section>
     </>
+  );
+}
+function ScreenLanding({ join }) {
+  const [copied, setCopied] = useState(false),
+    [error, setError] = useState("");
+  const url = `${location.origin}/screen#room=${join.id}&key=${join.key}`;
+  const nativeURL = `pulsoscreen://pair?room=${join.id}&key=${join.key}`;
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    } catch {
+      setError(
+        "No se pudo copiar. Vuelve a escanear el QR y abre Pulso Screen.",
+      );
+    }
+  }
+  return (
+    <div className="camera-phone">
+      <section className="camera-intro">
+        <div>
+          <span className="eyebrow">
+            COMPARTE PANTALLA. USA CÁMARA DE APPLE.
+          </span>
+          <h1>Abre Pulso Screen en tu iPhone.</h1>
+          <p>
+            Este modo necesita nuestra app instalada. Safari no puede transmitir
+            la pantalla de otras apps.
+          </p>
+        </div>
+      </section>
+      <section className="camera-card">
+        <h2>Primero, prepara la transmisión</h2>
+        <ol className="camera-steps">
+          <li>Abre Pulso Screen con el botón inferior.</li>
+          <li>
+            En la app, pulsa Copiar enlace y preparar transmisión. Elige Pulso
+            Screen y pega el enlace en su configuración.
+          </li>
+          <li>
+            Confirma la transmisión en iOS. Cuando Windows reciba la imagen,
+            abre Cámara y graba allí.
+          </li>
+        </ol>
+        <a className="button primary" href={nativeURL}>
+          <Smartphone size={17} />
+          Abrir Pulso Screen
+        </a>
+        <button className="button white" onClick={copy}>
+          {copied ? <Check size={16} /> : <Share2 size={16} />}{" "}
+          {copied ? "Enlace copiado" : "Copiar enlace de emparejamiento"}
+        </button>
+        <p>
+          Se compartirá toda la pantalla, sin audio. El vídeo de Cámara queda en
+          Fotos; Pulso no lo guarda.
+        </p>
+        {error && (
+          <p className="camera-error" role="alert">
+            {error}
+          </p>
+        )}
+      </section>
+      <section className="camera-card">
+        <h2>¿Todavía no está instalada?</h2>
+        <p>
+          El prototipo debe compilarse y firmarse antes de instalarlo. La firma
+          gratuita normalmente requiere renovación cada siete días. La
+          transmisión de Cámara aún está pendiente de comprobar en tu
+          dispositivo.
+        </p>
+        <a
+          className="text-button"
+          href="https://github.com/jesus2210/instagram-analizador/blob/main/native/ios/README.md"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Ver instrucciones de Windows →
+        </a>
+      </section>
+    </div>
   );
 }
 function Sender({ join }) {

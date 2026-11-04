@@ -58,6 +58,12 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
         "El emparejamiento temporal no está disponible. Revisa el almacén compartido del servidor.",
         503,
       );
+    const mode = req.body?.mode ?? "camera";
+    if (!["camera", "screen"].includes(mode))
+      throw new MetaError(
+        "Selecciona cámara del navegador o pantalla del iPhone.",
+        400,
+      );
     const address =
       req.get("x-vercel-forwarded-for") ||
       req.socket.remoteAddress ||
@@ -71,6 +77,7 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
     await store.put(
       `camera:room:${id}`,
       {
+        mode,
         viewerHash: digest(viewerKey),
         senderHash: digest(senderKey),
         expiresAt,
@@ -103,6 +110,7 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
   router.get("/rooms/:id", async (req, res) => {
     const { room, role } = req.camera;
     res.json({
+      mode: room.mode || "camera",
       expiresAt: room.expiresAt,
       description: role === "viewer" ? room.offer : room.answer,
       claimed: Boolean(room.senderId),
@@ -137,6 +145,12 @@ export function cameraRouter({ store, publicUrl, now = Date.now }) {
       );
     if (!/^[a-f0-9]{32}$/.test(req.body?.senderId || ""))
       throw new MetaError("La sesión del iPhone no es válida.", 400);
+    const source = req.body?.source ?? "camera";
+    if (source !== (req.camera.room.mode || "camera"))
+      throw new MetaError(
+        "El emisor no corresponde al modo del monitor. Genera un QR del modo correcto.",
+        400,
+      );
     const offer = description(req.body?.description, "offer");
     await mutate(req, (room) => {
       if (room.senderId && room.senderId !== req.body.senderId)

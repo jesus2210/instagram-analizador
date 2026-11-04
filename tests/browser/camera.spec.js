@@ -6,10 +6,10 @@ test("monitor is accessible without Instagram and fits a phone viewport", async 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/camera");
   await expect(
-    page.getByRole("heading", { name: "La cámara del iPhone, frente a ti." }),
+    page.getByRole("heading", { name: "Tu iPhone, frente a ti." }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Generar QR de cámara" }),
+    page.getByRole("button", { name: "Generar QR de pantalla" }),
   ).toBeVisible();
   await expect(
     page.getByText("Conectar Instagram", { exact: true }),
@@ -75,6 +75,9 @@ test("actual WebRTC sends the phone camera, records only locally and releases de
   });
   try {
     await pc.goto("http://127.0.0.1:5173/camera");
+    await pc
+      .getByRole("button", { name: "Cámara del navegador", exact: true })
+      .click();
     await pc.getByRole("button", { name: "Generar QR de cámara" }).click();
     await expect(
       pc.getByRole("img", {
@@ -219,13 +222,38 @@ test("camera module opens inside Pulso independently of Meta and demonstration d
     .getByRole("button", { name: "Monitor de cámara", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "La cámara del iPhone, frente a ti." }),
+    page.getByRole("heading", { name: "Tu iPhone, frente a ti." }),
   ).toBeVisible();
   await expect(page.locator(".demo-banner")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Conectar Instagram", exact: true }),
   ).not.toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Generar QR de cámara" }),
+    page.getByRole("button", { name: "Generar QR de pantalla" }),
   ).toBeVisible();
+});
+
+test("native screen landing opens the own app without requesting browser camera access", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = () => {
+      window.__unwantedCamera = true;
+      return Promise.reject(new Error("Not allowed in screen landing"));
+    };
+  });
+  await page.goto("/screen#room=" + "a".repeat(32) + "&key=" + "b".repeat(64));
+  await expect(
+    page.getByRole("heading", { name: "Abre Pulso Screen en tu iPhone." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Abrir Pulso Screen", exact: true }),
+  ).toHaveAttribute("href", /^pulsoscreen:\/\/pair\?room=/);
+  await expect(
+    page.getByRole("button", { name: "Permitir cámara y conectar" }),
+  ).toHaveCount(0);
+  expect(await page.evaluate(() => Boolean(window.__unwantedCamera))).toBe(
+    false,
+  );
+  expect(page.url()).not.toContain("key=");
 });

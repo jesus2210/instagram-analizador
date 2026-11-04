@@ -2072,7 +2072,9 @@ function App() {
 }
 
 createRoot(document.getElementById("root")).render(
-  window.location.pathname.replace(/\/$/, "") === "/camera" ? (
+  ["/camera", "/screen"].includes(
+    window.location.pathname.replace(/\/$/, ""),
+  ) ? (
     <CameraPage standalone />
   ) : (
     <App />

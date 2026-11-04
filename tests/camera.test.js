@@ -32,8 +32,8 @@ async function serve(t) {
       },
       ...(method !== "GET" ? { body: JSON.stringify(body || {}) } : {}),
     });
-  const create = async (address = "test-client") => {
-    const r = await request("/rooms", "POST", {}, null, {
+  const create = async (address = "test-client", mode = "camera") => {
+    const r = await request("/rooms", "POST", { mode }, null, {
       "x-vercel-forwarded-for": address,
     });
     return { status: r.status, ...(await r.json()) };
@@ -173,4 +173,58 @@ test("cross-site room creation, invalid descriptions and role substitution are r
       ).status,
       400,
     );
+});
+
+test("screen rooms distinguish the native sender from the browser camera and keep role isolation", async (t) => {
+  const { create, request } = await serve(t);
+  const room = await create("native-screen", "screen");
+  assert.equal(room.status, 201);
+  const path = `/rooms/${room.id}`;
+  assert.equal(
+    (await (await request(path, "GET", null, room.senderKey)).json()).mode,
+    "screen",
+  );
+  const body = { senderId: "a".repeat(32), description: offer };
+  assert.equal(
+    (await request(path + "/offer", "POST", body, room.senderKey)).status,
+    400,
+  );
+  assert.equal(
+    (
+      await request(
+        path + "/offer",
+        "POST",
+        { ...body, source: "screen" },
+        room.senderKey,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await request(
+        path + "/answer",
+        "POST",
+        { description: answer },
+        room.senderKey,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await request(
+        path + "/answer",
+        "POST",
+        { description: answer },
+        room.viewerKey,
+      )
+    ).status,
+    200,
+  );
+  assert.deepEqual(
+    (await (await request(path, "GET", null, room.senderKey)).json())
+      .description,
+    answer,
+  );
 });

@@ -16,6 +16,10 @@
     {
       "source": "/camera",
       "destination": "/index.html"
+    },
+    {
+      "source": "/screen",
+      "destination": "/index.html"
     }
   ],
   "crons": [
@@ -39,6 +43,19 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(self), microphone=(self)"
+        }
+      ]
+    },
+    {
+      "source": "/screen",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
         }
       ]
     }

@@ -1,0 +1,180 @@
+{
+  "name": "PulsoScreen",
+  "options": {
+    "deploymentTarget": {
+      "iOS": "18.0"
+    },
+    "xcodeVersion": "16.0"
+  },
+  "settings": {
+    "base": {
+      "SWIFT_VERSION": "5.0",
+      "IPHONEOS_DEPLOYMENT_TARGET": "18.0",
+      "PULSO_BUNDLE_ID": "dev.pulso.screen",
+      "CODE_SIGN_STYLE": "Automatic",
+      "CURRENT_PROJECT_VERSION": "1",
+      "MARKETING_VERSION": "0.1.0"
+    }
+  },
+  "packages": {
+    "WebRTC": {
+      "url": "https://github.com/stasel/WebRTC.git",
+      "exactVersion": "156.0.0"
+    }
+  },
+  "targets": {
+    "PulsoScreen": {
+      "type": "application",
+      "platform": "iOS",
+      "sources": ["App", "Shared"],
+      "settings": {
+        "base": {
+          "PRODUCT_BUNDLE_IDENTIFIER": "$(PULSO_BUNDLE_ID)",
+          "TARGETED_DEVICE_FAMILY": "1,2",
+          "ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES": "YES"
+        }
+      },
+      "info": {
+        "path": "App/Info.plist",
+        "properties": {
+          "CFBundleIdentifier": "$(PRODUCT_BUNDLE_IDENTIFIER)",
+          "CFBundleExecutable": "$(EXECUTABLE_NAME)",
+          "CFBundleName": "$(PRODUCT_NAME)",
+          "CFBundleInfoDictionaryVersion": "6.0",
+          "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+          "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
+          "CFBundlePackageType": "APPL",
+          "CFBundleDisplayName": "Pulso Screen",
+          "UILaunchScreen": {},
+          "CFBundleURLTypes": [
+            {
+              "CFBundleURLName": "app.pulso.screen.pair",
+              "CFBundleURLSchemes": ["pulsoscreen"]
+            }
+          ],
+          "UISupportedInterfaceOrientations": [
+            "UIInterfaceOrientationPortrait",
+            "UIInterfaceOrientationLandscapeLeft",
+            "UIInterfaceOrientationLandscapeRight"
+          ],
+          "NSLocalNetworkUsageDescription": "Pulso Screen usa la red local para enviar la pantalla directamente a tu laptop."
+        }
+      },
+      "dependencies": [
+        {
+          "target": "PulsoBroadcast",
+          "embed": true
+        },
+        {
+          "target": "PulsoSetup",
+          "embed": true
+        },
+        {
+          "package": "WebRTC",
+          "embed": true
+        },
+        {
+          "sdk": "ReplayKit.framework"
+        }
+      ]
+    },
+    "PulsoBroadcast": {
+      "type": "app-extension",
+      "platform": "iOS",
+      "sources": ["Broadcast", "Shared"],
+      "settings": {
+        "base": {
+          "PRODUCT_BUNDLE_IDENTIFIER": "$(PULSO_BUNDLE_ID).broadcast",
+          "APPLICATION_EXTENSION_API_ONLY": "YES",
+          "SKIP_INSTALL": "YES",
+          "LD_RUNPATH_SEARCH_PATHS": "$(inherited) @executable_path/../../Frameworks @executable_path/Frameworks"
+        }
+      },
+      "info": {
+        "path": "Broadcast/Info.plist",
+        "properties": {
+          "CFBundleIdentifier": "$(PRODUCT_BUNDLE_IDENTIFIER)",
+          "CFBundleExecutable": "$(EXECUTABLE_NAME)",
+          "CFBundleName": "$(PRODUCT_NAME)",
+          "CFBundleInfoDictionaryVersion": "6.0",
+          "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+          "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
+          "CFBundlePackageType": "XPC!",
+          "CFBundleDisplayName": "Pulso Screen",
+          "NSExtension": {
+            "NSExtensionPointIdentifier": "com.apple.broadcast-services-upload",
+            "NSExtensionPrincipalClass": "$(PRODUCT_MODULE_NAME).SampleHandler",
+            "NSExtensionAttributes": {
+              "RPBroadcastProcessMode": "RPBroadcastProcessModeSampleBuffer"
+            }
+          },
+          "NSLocalNetworkUsageDescription": "Pulso Screen usa la red local para enviar la pantalla directamente a tu laptop."
+        }
+      },
+      "dependencies": [
+        {
+          "package": "WebRTC",
+          "embed": false
+        },
+        {
+          "sdk": "ReplayKit.framework"
+        },
+        {
+          "sdk": "VideoToolbox.framework"
+        },
+        {
+          "sdk": "AVFoundation.framework"
+        }
+      ]
+    },
+    "PulsoSetup": {
+      "type": "app-extension",
+      "platform": "iOS",
+      "sources": ["Setup", "Shared"],
+      "settings": {
+        "base": {
+          "PRODUCT_BUNDLE_IDENTIFIER": "$(PULSO_BUNDLE_ID).setup",
+          "APPLICATION_EXTENSION_API_ONLY": "YES",
+          "SKIP_INSTALL": "YES"
+        }
+      },
+      "info": {
+        "path": "Setup/Info.plist",
+        "properties": {
+          "CFBundleIdentifier": "$(PRODUCT_BUNDLE_IDENTIFIER)",
+          "CFBundleExecutable": "$(EXECUTABLE_NAME)",
+          "CFBundleName": "$(PRODUCT_NAME)",
+          "CFBundleInfoDictionaryVersion": "6.0",
+          "CFBundleShortVersionString": "$(MARKETING_VERSION)",
+          "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
+          "CFBundlePackageType": "XPC!",
+          "CFBundleDisplayName": "Pulso Screen",
+          "NSExtension": {
+            "NSExtensionPointIdentifier": "com.apple.broadcast-services-setupui",
+            "NSExtensionPrincipalClass": "$(PRODUCT_MODULE_NAME).BroadcastSetupViewController",
+            "NSExtensionAttributes": {
+              "RPBroadcastUploadExtension": "$(PULSO_BUNDLE_ID).broadcast"
+            }
+          }
+        }
+      },
+      "dependencies": [
+        {
+          "sdk": "ReplayKit.framework"
+        }
+      ]
+    }
+  },
+  "schemes": {
+    "PulsoScreen": {
+      "build": {
+        "targets": {
+          "PulsoScreen": "all"
+        }
+      },
+      "archive": {
+        "config": "Release"
+      }
+    }
+  }
+}

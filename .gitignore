@@ -11,3 +11,13 @@ test-results/
 .env*
 
 !.env.example
+
+# Generated iOS projects, signing products and local build output
+native/build/
+native/ios/PulsoScreen.xcodeproj/
+native/ios/App/Info.plist
+native/ios/Setup/Info.plist
+native/ios/Broadcast/Info.plist
+*.mobileprovision
+*.p12
+*.ipa

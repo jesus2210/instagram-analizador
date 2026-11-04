@@ -1,0 +1,40 @@
+name: Build Pulso Screen (unsigned)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pulso-screen-build
+  cancel-in-progress: true
+jobs:
+  unsigned-ipa:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      PULSO_BUNDLE_ID: dev.pulso.${{ github.repository_owner }}.screen
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Show Xcode version
+        run: xcodebuild -version
+      - name: Install project generator
+        run: command -v xcodegen >/dev/null || brew install xcodegen
+      - name: Validate pairing parser with the Swift compiler
+        run: |
+          swiftc native/ios/Shared/PairingLink.swift native/ios/Validation/main.swift -o "$RUNNER_TEMP/pulso-pairing-tests"
+          "$RUNNER_TEMP/pulso-pairing-tests"
+      - name: Build unsigned iPhone app and both ReplayKit extensions
+        run: bash native/ios/build-unsigned.sh
+      - name: Include installation guide
+        run: cp native/ios/README.md native/build/INSTALL.md
+      - name: Upload unsigned prototype
+        uses: actions/upload-artifact@v4
+        with:
+          name: PulsoScreen-unsigned
+          path: |
+            native/build/PulsoScreen-unsigned.ipa
+            native/build/SHA256SUMS.txt
+            native/build/INSTALL.md
+          if-no-files-found: error
+          retention-days: 3

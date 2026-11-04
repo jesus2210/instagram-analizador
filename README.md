@@ -112,9 +112,9 @@ El código fuente se conserva en este directorio; no se ha enviado automáticame
 
 ## Monitor propio de cámara: iPhone → Windows
 
-La sección **Monitor de cámara**, o la ruta directa `/camera`, permite usar Windows como visor de la cámara trasera del iPhone. No requiere iniciar sesión en Meta, OpenAI, instalar una aplicación de duplicación ni contratar un servicio adicional. Esta incorporación está preparada localmente; su publicación se verifica por separado del despliegue Pro indicado arriba.
+El modo **Monitor de cámara → Cámara del navegador**, en `/camera`, permite usar Windows como visor de la cámara trasera abierta dentro del navegador. No requiere iniciar sesión en Meta, OpenAI, instalar una aplicación de duplicación ni contratar un servicio adicional. Esta incorporación está preparada localmente; su publicación se verifica por separado del despliegue Pro indicado arriba.
 
-1. Abre Pulso en la laptop y entra en Monitor de cámara.
+1. Abre Pulso en la laptop y entra en Monitor de cámara → Cámara del navegador.
 2. Genera un QR y escanéalo con el iPhone.
 3. Abre el enlace en Safari y pulsa **Permitir cámara y conectar**.
 4. Mira el encuadre en Windows; puedes reflejar solo la vista, activar una cuadrícula o abrir pantalla completa.
@@ -141,3 +141,16 @@ Pruebas nuevas: caducidad, separación de roles, exclusión de un segundo iPhone
 Para ejecutar la prueba WebRTC completa en un entorno cuyo Chromium administrado bloquea UDP, usa un navegador de pruebas compatible y establece `PULSO_RTC_CHROMIUM_EXECUTABLE_PATH`. Sin esa variable la prueba de conexión se omite explícitamente si detecta la política `disable_non_proxied_udp`; las demás pruebas siguen ejecutándose. En esta entrega se validó la conexión real con un Chromium Headless Shell instalado fuera del repositorio mediante `@sparticuz/chromium`, sin modificar las políticas del navegador del sistema. El navegador alternativo es solo una herramienta local de pruebas, no una dependencia de producción.
 
 Estado de publicación del monitor: pendiente. El entorno actual rechaza `https://vercel.com` y `https://api.vercel.com` con `403 Forbidden` en el túnel del proxy. Estos destinos ya figuran en la configuración guardada, pero eso no demuestra que estén permitidos en la instancia activa. Hay que aplicar los permisos de red del entorno y después renovar la autenticación de Vercel. La solicitud de acceso de red de esta sesión no concedió permisos adicionales. No se generó un nuevo enlace de acceso válido ni se desplegó el monitor.
+
+
+## Pulso Screen: prototipo para usar Cámara de Apple
+
+El propietario confirmó que la grabación de pantalla del iPhone muestra Cámara y acepta renovar semanalmente la instalación gratuita. Esto es una señal de viabilidad, no una validación de transmisión ReplayKit.
+
+Se añadió `native/ios/` con app iOS, extensión de configuración y extensión de subida, además de un workflow **manual** de GitHub Actions para producir un IPA **sin firmar**. El modo **Pantalla del iPhone (app propia)** es ahora la opción inicial del monitor. La página `/screen` enlaza con la app mediante un esquema local y no solicita cámara al navegador. El modo anterior permanece disponible explícitamente como Cámara del navegador.
+
+La implementación usa `setupInfo` de ReplayKit para pasar el enlace privado entre extensiones, sin App Groups ni entitlements de pago. Solo procesa buffers de vídeo; no abre una cámara ni captura micrófono. El monitor no puede iniciar/detener la grabación de Cámara de Apple. La firma e instalación locales desde Windows, la continuidad al abrir Cámara y la estabilidad deben comprobarse en el teléfono. No se ha compilado la app iOS en este entorno Linux y todavía no hay un IPA validado.
+
+Lee [native/ios/README.md](native/ios/README.md) antes de ejecutar el workflow: comprueba la cuota gratuita de macOS, conserva las dos extensiones al firmar y utiliza tu cuenta Apple solo en el instalador local. El workflow no se ejecuta con cada push ni activa facturación. La compilación usa un paquete WebRTC con versión/commit fijos y verificación de checksum de SwiftPM. Los pasos de validación y compilación de Swift se ejecutarán en el Mac remoto, no se presentan como pasados aquí.
+
+La web necesita un despliegue con esta versión antes de probar el IPA; publicar código en GitHub o generar el archivo no actualiza Vercel. El acceso de red a Vercel seguía bloqueado en este entorno, por lo que no se afirma que esta versión esté publicada.
