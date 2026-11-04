@@ -10,7 +10,10 @@ export function parseCameraLink(hash = window.location.hash) {
 }
 export function makePeer() {
   return new RTCPeerConnection({
-    iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+    iceServers: [
+      { urls: "stun:stun.cloudflare.com:3478" },
+      { urls: "stun:stun.l.google.com:19302" },
+    ],
     bundlePolicy: "max-bundle",
   });
 }

@@ -100,7 +100,7 @@ function ActivityLogo() {
   return <Camera size={23} />;
 }
 function Viewer() {
-  const [mode, setMode] = useState("screen");
+  const [mode, setMode] = useState("camera");
   const [room, setRoom] = useState(null),
     [qr, setQr] = useState(""),
     [status, setStatus] = useState("idle"),
@@ -316,20 +316,20 @@ function Viewer() {
         aria-label="Origen de la imagen"
       >
         <button
-          className={mode === "screen" ? "selected" : ""}
-          disabled={!["idle", "ended", "failed"].includes(status)}
-          aria-pressed={mode === "screen"}
-          onClick={() => setMode("screen")}
-        >
-          Pantalla del iPhone (app propia)
-        </button>
-        <button
           className={mode === "camera" ? "selected" : ""}
           disabled={!["idle", "ended", "failed"].includes(status)}
           aria-pressed={mode === "camera"}
           onClick={() => setMode("camera")}
         >
-          Cámara del navegador
+          Cámara del navegador (recomendado)
+        </button>
+        <button
+          className={mode === "screen" ? "selected" : ""}
+          disabled={!["idle", "ended", "failed"].includes(status)}
+          aria-pressed={mode === "screen"}
+          onClick={() => setMode("screen")}
+        >
+          Pantalla del iPhone (app propia, experimental)
         </button>
       </div>
       {mode === "screen" && (
