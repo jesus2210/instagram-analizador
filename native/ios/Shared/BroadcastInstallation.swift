@@ -5,7 +5,8 @@ struct BroadcastInstallation {
     static let uploadPoint = "com.apple.broadcast-services-upload"
     static let setupPoint = "com.apple.broadcast-services-setupui"
 
-    static func validate(_ manifests: [[String: Any]]) throws {
+    @discardableResult
+    static func validate(_ manifests: [[String: Any]]) throws -> String {
         func matching(_ point: String) -> [[String: Any]] {
             manifests.filter { info in
                 let extensionInfo = info["NSExtension"] as? [String: Any]
@@ -18,10 +19,18 @@ struct BroadcastInstallation {
             throw ScreenError.message("No se encuentran las dos extensiones de Pulso Screen. Reinstala el IPA conservando las extensiones de transmisión y configuración.")
         }
         guard let uploadID = uploads[0]["CFBundleIdentifier"] as? String,
+              let setupID = setups[0]["CFBundleIdentifier"] as? String,
               let setupExtension = setups[0]["NSExtension"] as? [String: Any],
               let attributes = setupExtension["NSExtensionAttributes"] as? [String: Any],
               (attributes["RPBroadcastUploadExtension"] as? String) == uploadID else {
             throw ScreenError.message("Los identificadores de las extensiones no coinciden. El instalador puede haberlos cambiado. Reinstala conservando ambas extensiones y sus identificadores.")
         }
+        guard let uploadExtension = uploads[0]["NSExtension"] as? [String: Any],
+              (uploadExtension["RPBroadcastProcessMode"] as? String) == "RPBroadcastProcessModeSampleBuffer",
+              let rule = attributes["NSExtensionActivationRule"] as? [String: Any],
+              (rule["NSExtensionActivationSupportsReplayKitStreaming"] as? Bool) == true else {
+            throw ScreenError.message("La configuración de ReplayKit del IPA no es válida. Instala la revisión 0.1.2 o posterior con el modo de transmisión corregido.")
+        }
+        return setupID
     }
 }

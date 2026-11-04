@@ -21,8 +21,13 @@ test("iOS project embeds both required ReplayKit extensions without requiring pa
     "com.apple.broadcast-services-upload",
   );
   assert.equal(
-    upload.NSExtensionAttributes.RPBroadcastProcessMode,
+    upload.RPBroadcastProcessMode,
     "RPBroadcastProcessModeSampleBuffer",
+  );
+  assert.ok(!upload.NSExtensionAttributes?.RPBroadcastProcessMode);
+  assert.equal(
+    setup.NSExtensionAttributes.NSExtensionActivationRule.NSExtensionActivationSupportsReplayKitStreaming,
+    true,
   );
   assert.equal(
     setup.NSExtensionAttributes.RPBroadcastUploadExtension,

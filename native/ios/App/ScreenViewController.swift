@@ -173,21 +173,22 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         } catch { showError(error.localizedDescription) }
     }
 
-    private func checkInstalledExtensions() throws {
+    private func checkInstalledExtensions() throws -> String {
         guard let directory = Bundle.main.builtInPlugInsURL,
               let urls = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else {
             throw ScreenError.message("No se encuentran las extensiones. Reinstala el IPA conservando ambas extensiones en el instalador.")
         }
         let manifests = urls.filter { $0.pathExtension == "appex" }.compactMap { Bundle(url: $0)?.infoDictionary }
-        try BroadcastInstallation.validate(manifests)
+        return try BroadcastInstallation.validate(manifests)
     }
 
     @objc private func startBroadcast() {
         guard preparation == nil, broadcast == nil else { return }
         view.endEditing(true)
+        let setupID: String
         do {
             let link = try PairingLink(linkField.text)
-            try checkInstalledExtensions()
+            setupID = try checkInstalledExtensions()
             UIPasteboard.general.string = link.webURL.absoluteString
         } catch { showError(error.localizedDescription); return }
         RPScreenRecorder.shared().isCameraEnabled = false
@@ -207,7 +208,7 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
         preparationTimeout = timeout
         DispatchQueue.main.asyncAfter(deadline: .now() + 20, execute: timeout)
         // setupInfo passes the pairing to the upload extension without App Groups.
-        RPBroadcastActivityViewController.load { [weak self] controller, error in
+        RPBroadcastActivityViewController.load(withPreferredExtension: setupID) { [weak self] controller, error in
             DispatchQueue.main.async {
                 guard let self, self.preparation == attempt else { return }
                 self.preparationTimeout?.cancel()
@@ -219,7 +220,26 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
                 }
                 self.activityController = controller
                 controller.delegate = self
+                var configuration = self.prepareButton.configuration
+                configuration?.title = "Esperando confirmación en iOS…"
+                self.prepareButton.configuration = configuration
                 self.showStatus("Confirma el monitor en la pantalla de iOS. Al volver, Pulso iniciará la transmisión.")
+                guard self.presentedViewController == nil, self.view.window != nil,
+                      UIApplication.shared.applicationState == .active else {
+                    self.finishPreparation()
+                    self.showError("Pulso no pudo mostrar la configuración porque otra pantalla está abierta o la app no está activa. Vuelve a Pulso Screen e inténtalo de nuevo.")
+                    return
+                }
+                // Some ReplayKit sheets do not trigger the host's appearance
+                // callbacks when they close. Always bound this stage too.
+                let setupTimeout = DispatchWorkItem { [weak self] in
+                    guard let self, self.preparation == attempt else { return }
+                    self.activityController?.dismiss(animated: true)
+                    self.finishPreparation()
+                    self.showError("iOS no entregó el resultado de la configuración en dos minutos. La preparación se canceló y puedes volver a intentarlo.")
+                }
+                self.preparationTimeout = setupTimeout
+                DispatchQueue.main.asyncAfter(deadline: .now() + 120, execute: setupTimeout)
                 if let popover = controller.popoverPresentationController {
                     popover.sourceView = self.view
                     popover.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 1, height: 1)

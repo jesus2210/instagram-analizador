@@ -35,6 +35,7 @@ PULSO_APP="$PULSO_OUTPUT/PulsoScreen.xcarchive/Products/Applications/PulsoScreen
   echo "Falta Frameworks/WebRTC.framework/WebRTC en el archivo. No se generará un IPA incompleto."
   exit 1
 }
+python3 "$PULSO_IOS_ROOT/validate-archive.py" "$PULSO_APP"
 PULSO_PACKAGE="$(mktemp -d "$PULSO_OUTPUT/package.XXXXXX")"
 trap 'rm -rf "$PULSO_PACKAGE"' EXIT
 mkdir -p "$PULSO_PACKAGE/Payload"

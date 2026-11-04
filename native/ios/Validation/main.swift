@@ -33,22 +33,37 @@ do {
 }
 
 func uploadManifest(_ identifier: String) -> [String: Any] {
-    ["CFBundleIdentifier": identifier, "NSExtension": ["NSExtensionPointIdentifier": BroadcastInstallation.uploadPoint]]
+    ["CFBundleIdentifier": identifier, "NSExtension": [
+        "NSExtensionPointIdentifier": BroadcastInstallation.uploadPoint,
+        "RPBroadcastProcessMode": "RPBroadcastProcessModeSampleBuffer"
+    ]]
 }
 func setupManifest(_ uploadID: String) -> [String: Any] {
     ["CFBundleIdentifier": "dev.pulso.test.setup", "NSExtension": [
         "NSExtensionPointIdentifier": BroadcastInstallation.setupPoint,
-        "NSExtensionAttributes": ["RPBroadcastUploadExtension": uploadID]
+        "NSExtensionAttributes": [
+            "RPBroadcastUploadExtension": uploadID,
+            "NSExtensionActivationRule": ["NSExtensionActivationSupportsReplayKitStreaming": true]
+        ]
     ]]
 }
 do {
     let upload = uploadManifest("dev.pulso.test.broadcast")
     let setup = setupManifest("dev.pulso.test.broadcast")
-    try BroadcastInstallation.validate([upload, setup])
-    for manifests in [[], [upload], [setup], [upload, upload, setup], [upload, setupManifest("dev.pulso.changed.broadcast")]] {
+    let selectedID = try BroadcastInstallation.validate([upload, setup])
+    require(selectedID == "dev.pulso.test.setup", "ReplayKit must prefer the installed setup UI, not the upload service")
+    let misplacedMode: [String: Any] = ["CFBundleIdentifier": "dev.pulso.test.broadcast", "NSExtension": [
+        "NSExtensionPointIdentifier": BroadcastInstallation.uploadPoint,
+        "NSExtensionAttributes": ["RPBroadcastProcessMode": "RPBroadcastProcessModeSampleBuffer"]
+    ]]
+    let inactiveSetup: [String: Any] = ["CFBundleIdentifier": "dev.pulso.test.setup", "NSExtension": [
+        "NSExtensionPointIdentifier": BroadcastInstallation.setupPoint,
+        "NSExtensionAttributes": ["RPBroadcastUploadExtension": "dev.pulso.test.broadcast"]
+    ]]
+    for manifests in [[], [upload], [setup], [upload, upload, setup], [upload, setupManifest("dev.pulso.changed.broadcast")], [misplacedMode, setup], [upload, inactiveSetup]] {
         var rejected = false
         do { try BroadcastInstallation.validate(manifests) } catch { rejected = true }
         require(rejected, "Missing, duplicate or mismatched broadcast services accepted")
     }
-    print("Installed-service validation passed: both services required; missing, duplicate and changed identifiers rejected.")
+    print("Installed-service validation passed: identifiers, sample-buffer mode location, setup activation and preferred service checked.")
 } catch { fatalError("Installed-service validation failed") }

@@ -12,8 +12,8 @@
       "IPHONEOS_DEPLOYMENT_TARGET": "18.0",
       "PULSO_BUNDLE_ID": "dev.pulso.screen",
       "CODE_SIGN_STYLE": "Automatic",
-      "CURRENT_PROJECT_VERSION": "2",
-      "MARKETING_VERSION": "0.1.1"
+      "CURRENT_PROJECT_VERSION": "3",
+      "MARKETING_VERSION": "0.1.2"
     }
   },
   "packages": {
@@ -105,9 +105,7 @@
           "NSExtension": {
             "NSExtensionPointIdentifier": "com.apple.broadcast-services-upload",
             "NSExtensionPrincipalClass": "$(PRODUCT_MODULE_NAME).SampleHandler",
-            "NSExtensionAttributes": {
-              "RPBroadcastProcessMode": "RPBroadcastProcessModeSampleBuffer"
-            }
+            "RPBroadcastProcessMode": "RPBroadcastProcessModeSampleBuffer"
           },
           "NSLocalNetworkUsageDescription": "Pulso Screen usa la red local para enviar la pantalla directamente a tu laptop."
         }
@@ -155,7 +153,10 @@
             "NSExtensionPointIdentifier": "com.apple.broadcast-services-setupui",
             "NSExtensionPrincipalClass": "$(PRODUCT_MODULE_NAME).BroadcastSetupViewController",
             "NSExtensionAttributes": {
-              "RPBroadcastUploadExtension": "$(PULSO_BUNDLE_ID).broadcast"
+              "RPBroadcastUploadExtension": "$(PULSO_BUNDLE_ID).broadcast",
+              "NSExtensionActivationRule": {
+                "NSExtensionActivationSupportsReplayKitStreaming": true
+              }
             }
           }
         }
