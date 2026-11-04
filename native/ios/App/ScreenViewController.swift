@@ -84,6 +84,8 @@ final class ScreenViewController: UIViewController, RPBroadcastActivityViewContr
             UIPasteboard.general.string = link.webURL.absoluteString
         } catch { status.text = error.localizedDescription; return }
         view.endEditing(true)
+        RPScreenRecorder.shared().isCameraEnabled = false
+        RPScreenRecorder.shared().isMicrophoneEnabled = false
         // ReplayKit's setup extension passes setupInfo directly to the upload extension.
         // No App Groups, shared keychain entitlement or background clipboard access is needed.
         RPBroadcastActivityViewController.load { [weak self] controller, error in

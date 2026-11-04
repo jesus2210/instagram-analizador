@@ -45,7 +45,7 @@ Para renovar, vuelve a firmar e instalar el mismo IPA con la misma cuenta y los 
 3. Escanéalo. La página `/screen` ofrece **Abrir Pulso Screen** y copiar el enlace; si la app no está instalada, primero completa su instalación.
 4. En la app pulsa **Copiar enlace y preparar transmisión**. Elige el servicio **Pulso Screen** en el selector de iOS.
 5. En su configuración visible, pulsa **Pegar enlace** y **Confirmar monitor y continuar**. El sistema entrega ese enlace temporal a la extensión de subida mediante `setupInfo`, sin App Groups ni lectura de portapapeles en segundo plano.
-6. Confirma los diálogos de iOS. Espera a ver la imagen de Pulso Screen en Windows **antes** de abrir Cámara de Apple.
+6. Confirma los diálogos de iOS y deja desactivado el micrófono de la transmisión de pantalla; Cámara gestionará su audio. Espera a ver la imagen de Pulso Screen en Windows **antes** de abrir Cámara de Apple.
 7. Abre Cámara, comprueba que la imagen cambia en Windows y haz una grabación corta. Graba y detén desde Cámara; el monitor no controla los botones de esa app. El vídeo final queda en Fotos.
 8. Detén la transmisión desde el indicador de iOS, desde Pulso Screen o desde Terminar sesión en Windows.
 
